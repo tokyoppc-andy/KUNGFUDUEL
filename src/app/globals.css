@@ -3,78 +3,91 @@
 @tailwind utilities;
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
 }
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
+    /* Color Scheme */
+    --background: 40 1% 6%; /* Dark charcoal grey */
+    --foreground: 0 0% 95%; /* Light text */
+
+    --primary: 9 91% 54%; /* Deep fiery red */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 34 7% 31%; /* Muted grey */
+    --secondary-foreground: 0 0% 95%;
+
+    --accent: 25 95% 53%; /* Energetic orange */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%; /* Standard destructive red */
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+
+    --card: 40 1% 10%; /* Slightly lighter card background */
+    --card-foreground: 0 0% 95%;
+
+    --popover: 40 1% 10%;
+    --popover-foreground: 0 0% 95%;
+
+    --border: 40 1% 15%; /* Darker border */
+    --input: 40 1% 15%;
+    --ring: 9 91% 54%; /* Fiery red ring */
+
     --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+
+    /* Sidebar colors */
+    --sidebar-background: 40 1% 8%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 9 91% 54%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 25 95% 53%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 40 1% 20%;
+    --sidebar-ring: 25 95% 53%;
+
+    /* Chart colors */
+    --chart-1: 9 91% 54%; /* Primary red */
+    --chart-2: 25 95% 53%; /* Accent orange */
+    --chart-3: 171 51% 57%; /* Secondary blue */
+    --chart-4: 120 51% 46%; /* Green */
+    --chart-5: 214 74% 63%; /* Purple */
+  }
+
+  .dark {
+    --background: 40 1% 6%;
+    --foreground: 0 0% 95%;
+
+    --primary: 9 91% 54%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 34 7% 31%;
+    --secondary-foreground: 0 0% 95%;
+
+    --accent: 25 95% 53%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --card: 40 1% 10%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 40 1% 10%;
+    --popover-foreground: 0 0% 95%;
+
+    --border: 40 1% 15%;
+    --input: 40 1% 15%;
+    --ring: 25 95% 53%; /* Changed ring color for dark mode consistency */
+
+    --sidebar-background: 40 1% 8%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 9 91% 54%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 25 95% 53%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 40 1% 20%;
+    --sidebar-ring: 25 95% 53%;
   }
 }
 
@@ -85,4 +98,377 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Custom styles for the app */
+.font-space-grotesk {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.font-inter {
+  font-family: 'Inter', sans-serif;
+}
+
+/* Ensure dark mode styles are correctly applied */
+.dark .bg-sidebar {
+  background-color: hsl(var(--sidebar-background));
+}
+.dark .text-sidebar-foreground {
+  color: hsl(var(--sidebar-foreground));
+}
+.dark .border-sidebar-border {
+  border-color: hsl(var(--sidebar-border));
+}
+.dark .ring-sidebar-ring {
+  --ring-color: hsl(var(--sidebar-ring));
+}
+
+/* Apply custom CSS variables */
+:root {
+  --radius: 0.5rem;
+}
+
+@keyframes hero-idle-breath {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-1px) scale(1.018);
+  }
+}
+
+@keyframes hero-selected-glow {
+  0%, 100% {
+    box-shadow: 0 0 14px rgba(251, 191, 36, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 26px rgba(251, 191, 36, 0.42);
+  }
+}
+
+@keyframes hero-hp-flash {
+  0%, 100% {
+    filter: none;
+  }
+  35% {
+    filter: drop-shadow(0 0 16px rgba(248, 113, 113, 0.9)) saturate(1.25);
+  }
+}
+
+@keyframes hero-energy-flash {
+  0%, 100% {
+    filter: none;
+  }
+  35% {
+    filter: drop-shadow(0 0 16px rgba(125, 211, 252, 0.95)) saturate(1.18);
+  }
+}
+
+@keyframes hero-attack-right {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(2px);
+  }
+}
+
+@keyframes hero-attack-left {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-2px);
+  }
+}
+
+@keyframes hero-defend-right {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(1.5px);
+  }
+}
+
+@keyframes hero-defend-left {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-1.5px);
+  }
+}
+
+@keyframes hero-tie-waver {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-1px);
+  }
+  75% {
+    transform: translateX(1px);
+  }
+}
+
+.hero-idle-breath {
+  animation: hero-idle-breath 3.6s ease-in-out infinite;
+}
+
+.hero-selected-glow {
+  animation: hero-selected-glow 2.8s ease-in-out infinite;
+}
+
+.hero-hp-flash {
+  animation: hero-hp-flash 0.7s ease-out 2;
+}
+
+.hero-energy-flash {
+  animation: hero-energy-flash 0.7s ease-out 2;
+}
+
+.hero-attack-right {
+  animation: hero-attack-right 1.2s ease-in-out infinite;
+}
+
+.hero-attack-left {
+  animation: hero-attack-left 1.2s ease-in-out infinite;
+}
+
+.hero-defend-right {
+  animation: hero-defend-right 1.45s ease-in-out infinite;
+}
+
+.hero-defend-left {
+  animation: hero-defend-left 1.45s ease-in-out infinite;
+}
+
+.hero-tie-waver {
+  animation: hero-tie-waver 1.8s ease-in-out infinite;
+}
+
+@keyframes battle-idle-float {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.015);
+  }
+}
+
+@keyframes battle-attack-right {
+  0%, 100% {
+    transform: translateX(0) scale(1);
+  }
+  45% {
+    transform: translateX(18px) scale(1.04);
+  }
+}
+
+@keyframes battle-attack-left {
+  0%, 100% {
+    transform: translateX(0) scale(1);
+  }
+  45% {
+    transform: translateX(-18px) scale(1.04);
+  }
+}
+
+@keyframes battle-hit-shake {
+  0%, 100% {
+    transform: translateX(0);
+    filter: none;
+  }
+  18% {
+    transform: translateX(-5px);
+    filter: drop-shadow(0 0 14px rgba(248, 113, 113, 0.95));
+  }
+  36% {
+    transform: translateX(4px);
+  }
+  54% {
+    transform: translateX(-2px);
+  }
+}
+
+@keyframes battle-block-brace {
+  0%, 100% {
+    transform: translateX(0) scale(1);
+  }
+  50% {
+    transform: translateX(-5px) scale(0.98);
+  }
+}
+
+@keyframes battle-block-brace-left {
+  0%, 100% {
+    transform: translateX(0) scale(1);
+  }
+  50% {
+    transform: translateX(5px) scale(0.98);
+  }
+}
+
+@keyframes battle-evade-right {
+  0%, 100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  45% {
+    transform: translateX(14px);
+    opacity: 0.78;
+  }
+}
+
+@keyframes battle-evade-left {
+  0%, 100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  45% {
+    transform: translateX(-14px);
+    opacity: 0.78;
+  }
+}
+
+@keyframes battle-clash-bump {
+  0%, 100% {
+    transform: translateX(0) scale(1);
+  }
+  45% {
+    transform: translateX(7px) scale(1.03);
+  }
+}
+
+@keyframes battle-clash-bump-left {
+  0%, 100% {
+    transform: translateX(0) scale(1);
+  }
+  45% {
+    transform: translateX(-7px) scale(1.03);
+  }
+}
+
+@keyframes battle-impact-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.45);
+  }
+  42% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+}
+
+@keyframes command-confirm-pulse {
+  0%, 100% {
+    box-shadow: 0 0 14px rgba(251, 191, 36, 0.26);
+  }
+  45% {
+    box-shadow: 0 0 30px rgba(251, 191, 36, 0.88);
+  }
+}
+
+@keyframes skill-ready-pulse {
+  0%, 100% {
+    box-shadow: 0 0 16px rgba(110, 231, 183, 0.32);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow: 0 0 32px rgba(110, 231, 183, 0.68);
+    filter: brightness(1.12);
+  }
+}
+
+@keyframes slash-left-to-right {
+  0% {
+    opacity: 0;
+    transform: translateX(-110%) rotate(-12deg) scaleX(0.65);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(120%) rotate(-12deg) scaleX(1.2);
+  }
+}
+
+@keyframes slash-right-to-left {
+  0% {
+    opacity: 0;
+    transform: translateX(110%) rotate(12deg) scaleX(0.65);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-120%) rotate(12deg) scaleX(1.2);
+  }
+}
+
+.battle-idle-float {
+  animation: battle-idle-float 3s ease-in-out infinite;
+}
+
+.battle-attack-right {
+  animation: battle-attack-right 0.72s ease-in-out infinite;
+}
+
+.battle-attack-left {
+  animation: battle-attack-left 0.72s ease-in-out infinite;
+}
+
+.battle-hit-shake {
+  animation: battle-hit-shake 0.55s ease-out infinite;
+}
+
+.battle-block-brace {
+  animation: battle-block-brace 0.82s ease-in-out infinite;
+}
+
+.battle-block-brace-left {
+  animation: battle-block-brace-left 0.82s ease-in-out infinite;
+}
+
+.battle-evade-right {
+  animation: battle-evade-right 0.88s ease-in-out infinite;
+}
+
+.battle-evade-left {
+  animation: battle-evade-left 0.88s ease-in-out infinite;
+}
+
+.battle-clash-bump {
+  animation: battle-clash-bump 0.8s ease-in-out infinite;
+}
+
+.battle-clash-bump-left {
+  animation: battle-clash-bump-left 0.8s ease-in-out infinite;
+}
+
+.battle-impact-pop {
+  animation: battle-impact-pop 0.9s ease-out infinite;
+}
+
+.command-confirm-pulse {
+  animation: command-confirm-pulse 0.86s ease-in-out infinite;
+}
+
+.skill-ready-pulse {
+  animation: skill-ready-pulse 1.35s ease-in-out infinite;
+}
+
+.slash-left-to-right {
+  animation: slash-left-to-right 0.74s ease-out infinite;
+}
+
+.slash-right-to-left {
+  animation: slash-right-to-left 0.74s ease-out infinite;
 }

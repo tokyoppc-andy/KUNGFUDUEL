@@ -12,9 +12,11 @@
 
 # testing
 /coverage
+/.codex-tools/
 
 # next.js
 /.next/
+/.next-verify/
 /out/
 
 # production

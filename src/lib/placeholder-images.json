@@ -1,3 +1,59 @@
+
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "player-character",
+      "description": "Illustration of a fiery martial artist ready for combat",
+      "imageUrl": "https://picsum.photos/seed/player-character/800/600",
+      "imageHint": "fiery martial artist"
+    },
+    {
+      "id": "ai-character",
+      "description": "Illustration of a sturdy martial artist with an earthen aura",
+      "imageUrl": "https://picsum.photos/seed/ai-character/800/600",
+      "imageHint": "earth martial artist"
+    },
+    {
+      "id": "character-selection",
+      "description": "A dynamic illustration of two martial artists facing off",
+      "imageUrl": "https://picsum.photos/seed/character-selection/800/400",
+      "imageHint": "martial artists facing off"
+    },
+    {
+      "id": "combat-intro",
+      "description": "A dramatic scene of a Kung Fu duel in progress",
+      "imageUrl": "https://picsum.photos/seed/combat-intro/600/300",
+      "imageHint": "Kung Fu duel"
+    },
+    {
+      "id": "clash-phase",
+      "description": "Intense close-up of two hands about to clash",
+      "imageUrl": "https://picsum.photos/seed/clash-phase/400/400",
+      "imageHint": "hands clashing"
+    },
+    {
+      "id": "attack-defense",
+      "description": "Action shot of a martial artist dodging an attack",
+      "imageUrl": "https://picsum.photos/seed/attack-defense/500/400",
+      "imageHint": "martial artist dodging attack"
+    },
+    {
+      "id": "special-ability-fire",
+      "description": "Fiery aura surrounding a martial artist",
+      "imageUrl": "https://picsum.photos/seed/special-ability-fire/400/300",
+      "imageHint": "fiery aura"
+    },
+    {
+      "id": "special-ability-earth",
+      "description": "Earthen shield protecting a martial artist",
+      "imageUrl": "https://picsum.photos/seed/special-ability-earth/400/300",
+      "imageHint": "earthen shield"
+    },
+    {
+      "id": "post-game-analysis",
+      "description": "A stylized radar chart visualizing combat performance metrics",
+      "imageUrl": "https://picsum.photos/seed/post-game-analysis/600/400",
+      "imageHint": "radar chart analysis"
+    }
+  ]
 }
