@@ -85,8 +85,8 @@ test("Energy is capped at 3 and Fire starts with 2 EN", () => {
 });
 
 test("Normal attack hit gains 1 EN, but normal miss does not", () => {
-  const hit = resolveRound(baseRound({ player: createFighter("player", "flame_cat", "steel"), aiDefenseDirection: "left" }));
-  const miss = resolveRound(baseRound({ player: createFighter("player", "flame_cat", "steel"), aiDefenseDirection: "center" }));
+  const hit = resolveRound(baseRound({ player: createFighter("player", "flame_cat", "steel"), aiDefenseDirection: "center" }));
+  const miss = resolveRound(baseRound({ player: createFighter("player", "flame_cat", "steel"), aiDefenseDirection: "left" }));
 
   assert.equal(hit.isHit, true);
   assert.equal(hit.player.energy, 1);
@@ -96,7 +96,7 @@ test("Normal attack hit gains 1 EN, but normal miss does not", () => {
 
 test("Earth Guard reduces first real damage but never below 1 HP", () => {
   const ai = createFighter("ai", "flame_cat", "earth");
-  const result = resolveRound(baseRound({ ai, aiDefenseDirection: "left" }));
+  const result = resolveRound(baseRound({ ai, aiDefenseDirection: "center" }));
 
   assert.equal(result.damage, 1);
   assert.equal(result.ai.hp, ai.hp - 1);
@@ -111,7 +111,7 @@ test("Water Step steals 1 EN on normal evade when RNG passes", () => {
       player,
       ai,
       playerAttackDirection: "center",
-      aiDefenseDirection: "center",
+      aiDefenseDirection: "left",
       rng: () => 0.1,
     }),
   );
@@ -129,7 +129,7 @@ test("Blade Hamster active requires tie, spends 2 EN, and refunds 1 EN on hit", 
       playerMove: "charge",
       aiMove: "charge",
       playerUseActive: true,
-      aiDefenseDirection: "low",
+      aiDefenseDirection: "center",
     }),
   );
 
@@ -137,6 +137,29 @@ test("Blade Hamster active requires tie, spends 2 EN, and refunds 1 EN on hit", 
   assert.equal(result.activeSkill.playerTriggered, true);
   assert.equal(result.player.energy, 1);
   assert.equal(result.player.activeUsesRemaining, Number.POSITIVE_INFINITY);
+});
+
+test("Blade Hamster tie active cannot be overridden by Triple Strike", () => {
+  const player = withEnergy(createFighter("player", "blade_hamster", "steel"), 3);
+  const result = resolveRound(
+    baseRound({
+      player,
+      playerMove: "charge",
+      aiMove: "charge",
+      playerUseActive: true,
+      playerUseTriple: true,
+      playerAttackDirection: "center",
+      playerSecondAttackDirection: "right",
+      playerThirdAttackDirection: "high",
+      aiDefenseDirection: "center",
+    }),
+  );
+
+  assert.equal(result.attacker, "player");
+  assert.equal(result.activeSkill.playerTriggered, true);
+  assert.equal(result.tripleStrike.usedBy, null);
+  assert.equal(result.tripleStrike.lanes.length, 0);
+  assert.equal(result.player.energy, 2);
 });
 
 test("Blade Hamster active refund works for Fire during early rounds", () => {
@@ -148,7 +171,7 @@ test("Blade Hamster active refund works for Fire during early rounds", () => {
       playerMove: "charge",
       aiMove: "charge",
       playerUseActive: true,
-      aiDefenseDirection: "low",
+      aiDefenseDirection: "center",
     }),
   );
 
@@ -164,7 +187,7 @@ test("Fire still blocks normal early EN gain", () => {
     baseRound({
       round: 1,
       player,
-      aiDefenseDirection: "left",
+      aiDefenseDirection: "center",
     }),
   );
 
@@ -202,7 +225,7 @@ test("Flame Cat active costs 2 EN, strikes two lanes, and grants no EN on hit", 
 
 test("Only Bulldog Monk has a per-duel active skill use limit", () => {
   const flameCat = withEnergy(createFighter("player", "flame_cat", "steel"), 2);
-  const spentFlameCat = resolveRound(baseRound({ player: flameCat, playerUseActive: true, aiDefenseDirection: "left" })).player;
+  const spentFlameCat = resolveRound(baseRound({ player: flameCat, playerUseActive: true, aiDefenseDirection: "center" })).player;
 
   assert.equal(spentFlameCat.activeUsesRemaining, Number.POSITIVE_INFINITY);
   assert.equal(canUseActiveSkill(withEnergy(spentFlameCat, 2), "player", { attacker: "player", clash: "player" }).ready, true);
@@ -231,14 +254,36 @@ test("Flame Cat active deals 2 HP during Duel Surge", () => {
       player,
       ai,
       playerUseActive: true,
-      aiDefenseDirection: "left",
+      aiDefenseDirection: "center",
     }),
   );
 
   assert.equal(result.damage, 2);
 });
 
-test("Bulldog Monk active costs 1 EN and covers two lanes", () => {
+test("Normal hit deals 2 HP starting on the first Duel Surge round", () => {
+  const beforeSurge = resolveRound(
+    baseRound({
+      round: 21,
+      player: createFighter("player", "flame_cat", "steel"),
+      aiDefenseDirection: "center",
+      rng: () => 0.99,
+    }),
+  );
+  const firstSurgeHit = resolveRound(
+    baseRound({
+      round: 22,
+      player: createFighter("player", "flame_cat", "steel"),
+      aiDefenseDirection: "center",
+      rng: () => 0.99,
+    }),
+  );
+
+  assert.equal(beforeSurge.damage, 1);
+  assert.equal(firstSurgeHit.damage, 2);
+});
+
+test("Bulldog Monk active costs 1 EN and marks two evade lanes", () => {
   const player = createFighter("player", "flame_cat", "steel");
   const ai = withEnergy(createFighter("ai", "bulldog_monk", "steel"), 1);
   const result = resolveRound(
@@ -252,7 +297,7 @@ test("Bulldog Monk active costs 1 EN and covers two lanes", () => {
     }),
   );
 
-  assert.equal(result.isHit, false);
+  assert.equal(result.isHit, true);
   assert.equal(result.activeSkill.aiTriggered, true);
   assert.equal(result.ai.energy, 0);
   assert.equal(result.ai.activeUsesRemaining, 1);
@@ -266,7 +311,7 @@ test("Blue Needle active clears defender EN and jams next gain", () => {
       player,
       ai,
       playerUseActive: true,
-      aiDefenseDirection: "left",
+      aiDefenseDirection: "center",
     }),
   );
 
@@ -353,7 +398,7 @@ test("Pig Spear active charges this round, then releases two-hit burst later", (
       player,
       ai,
       playerUseActive: true,
-      aiDefenseDirection: "left",
+      aiDefenseDirection: "center",
     }),
   );
   const released = resolveRound(
@@ -362,14 +407,14 @@ test("Pig Spear active charges this round, then releases two-hit burst later", (
       ai: charged.ai,
       playerAttackDirection: "center",
       playerSecondAttackDirection: "right",
-      aiDefenseDirection: "low",
+      aiDefenseDirection: "center",
     }),
   );
 
   assert.equal(charged.damage, 0);
   assert.equal(charged.player.energy, 0);
   assert.equal(charged.player.spearCharged, true);
-  assert.equal(released.damage, 3);
+  assert.equal(released.damage, 1);
   assert.equal(released.player.spearCharged, false);
   assert.equal(released.player.energy, 0);
 });
@@ -385,7 +430,7 @@ test("Triple Strike costs 3 EN, attacks three lanes, and grants no EN", () => {
       playerAttackDirection: "center",
       playerSecondAttackDirection: "right",
       playerThirdAttackDirection: "high",
-      aiDefenseDirection: "left",
+      aiDefenseDirection: "center",
     }),
   );
 
@@ -434,7 +479,7 @@ test("Water compresses incoming Triple Strike to one lane", () => {
   );
 
   assert.equal(result.tripleStrike.lanes.length, 1);
-  assert.equal(result.isHit, false);
+  assert.equal(result.isHit, true);
 });
 
 test("Active Skill and Triple Strike are only ready when conditions and EN are met", () => {
@@ -450,9 +495,9 @@ test("Active Skill and Triple Strike are only ready when conditions and EN are m
 });
 
 test("Steel Edge can add 1 HP to a normal hit, and Nature can heal 1 HP on normal hit", () => {
-  const steel = resolveRound(baseRound({ player: createFighter("player", "flame_cat", "steel"), aiDefenseDirection: "left", rng: () => 0.1 }));
+  const steel = resolveRound(baseRound({ player: createFighter("player", "flame_cat", "steel"), aiDefenseDirection: "center", rng: () => 0.1 }));
   const naturePlayer = withHp(createFighter("player", "flame_cat", "nature"), 4);
-  const nature = resolveRound(baseRound({ player: naturePlayer, aiDefenseDirection: "left", rng: () => 0.1 }));
+  const nature = resolveRound(baseRound({ player: naturePlayer, aiDefenseDirection: "center", rng: () => 0.1 }));
 
   assert.equal(steel.damage, 2);
   assert.equal(nature.player.hp, 5);
@@ -461,7 +506,7 @@ test("Steel Edge can add 1 HP to a normal hit, and Nature can heal 1 HP on norma
 test("Combo x3 clears defender EN, guarantees next attack, and resets chain counters", () => {
   const player = { ...createFighter("player", "flame_cat", "steel"), combo: 2 };
   const ai = withEnergy(createFighter("ai", "blade_hamster", "steel"), 3);
-  const result = resolveRound(baseRound({ player, ai, aiDefenseDirection: "left" }));
+  const result = resolveRound(baseRound({ player, ai, aiDefenseDirection: "center" }));
 
   assert.equal(result.nextGuaranteedAttacker, "player");
   assert.equal(result.ai.energy, 0);
@@ -479,7 +524,7 @@ test("Guaranteed attack round locks Combo and Evade counters at zero", () => {
       player,
       ai,
       guaranteedAttacker: "player",
-      aiDefenseDirection: "left",
+      aiDefenseDirection: "center",
     }),
   );
 

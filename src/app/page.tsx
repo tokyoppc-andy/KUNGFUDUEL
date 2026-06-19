@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  ChevronDown,
+  ChevronUp,
   Crosshair,
   Hourglass,
   RotateCcw,
@@ -38,10 +40,10 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
-type BattlePhase = "setup" | "clash" | "tie_break" | "lanes" | "game_over";
+type BattlePhase = "setup" | "clash" | "tie_break" | "lanes" | "lane_result" | "game_over";
 type BattleStatus = "attack" | "tie" | "defend" | "game_over";
 type FighterStance = "attack" | "defend" | "tie";
-type BattleStageEffectKind = "none" | "tie" | "hit" | "block" | "evade";
+type BattleStageEffectKind = "none" | "tie" | "hit" | "evade";
 type BattleSpriteMotion = "idle" | "attack" | "hit" | "block" | "evade" | "clash";
 type BattleSpriteAssetState = "idle" | "attack" | "defend" | "hit";
 type BattleStageVisualState = {
@@ -90,7 +92,7 @@ type LaneReveal = {
   attacker: FighterSide | null;
   playerDirections: Direction[];
   aiDirections: Direction[];
-  result: "hit" | "block" | "evade" | "miss";
+  result: "hit" | "miss";
   damage: number;
   expiresAt: number;
 };
@@ -165,12 +167,14 @@ type BattleState = {
   stats: BattleStats;
 };
 
-const CLASH_SECONDS = 10;
+const CLASH_SECONDS = 5;
 const TIE_BREAK_SECONDS = 3;
 const LANE_SECONDS = 5;
+const LANE_RESULT_SECONDS = 3;
 const BULLET_SECONDS = 10;
 const BATTLE_FRAME_WIDTH = 430;
 const BATTLE_FRAME_HEIGHT = 764;
+const BATTLE_CONTROLS_HEIGHT = 374;
 const SETUP_MUSIC_SRC = "/audio/level-zero-dash.mp3";
 const BATTLE_MUSIC_SRC = "/audio/iron-lotus-duel.mp3";
 const MUSIC_VOLUME = 0.42;
@@ -186,13 +190,22 @@ const HERO_MARKS: Record<HeroId, string> = {
 
 const BATTLE_SPRITE_STATES: BattleSpriteAssetState[] = ["idle", "attack", "defend", "hit"];
 
+const BATTLE_3D_SPRITE_SRC: Record<HeroId, string> = {
+  blade_hamster: "/assets/characters/blade_hamster_3d_test/blade_hamster_3d_test.png",
+  flame_cat: "/assets/characters_3d/flame_cat/flame_cat_3d.png",
+  bulldog_monk: "/assets/characters_3d/bulldog_monk/bulldog_monk_3d.png",
+  blue_needle: "/assets/characters_3d/blue_needle/blue_needle_3d.png",
+  blade_bunny: "/assets/characters_3d/blade_bunny/blade_bunny_3d.png",
+  pig_spear: "/assets/characters_3d/pig_spear/pig_spear_3d.png",
+};
+
 const BATTLE_SPRITES: Record<HeroId, Record<BattleSpriteAssetState, string>> = {
-  blade_hamster: createBattleSpriteSet("blade_hamster"),
-  flame_cat: createBattleSpriteSet("flame_cat"),
-  bulldog_monk: createBattleSpriteSet("bulldog_monk"),
-  blue_needle: createBattleSpriteSet("blue_needle"),
-  blade_bunny: createBattleSpriteSet("blade_bunny"),
-  pig_spear: createBattleSpriteSet("pig_spear"),
+  blade_hamster: createStaticBattleSpriteSet(BATTLE_3D_SPRITE_SRC.blade_hamster),
+  flame_cat: createStaticBattleSpriteSet(BATTLE_3D_SPRITE_SRC.flame_cat),
+  bulldog_monk: createStaticBattleSpriteSet(BATTLE_3D_SPRITE_SRC.bulldog_monk),
+  blue_needle: createStaticBattleSpriteSet(BATTLE_3D_SPRITE_SRC.blue_needle),
+  blade_bunny: createStaticBattleSpriteSet(BATTLE_3D_SPRITE_SRC.blade_bunny),
+  pig_spear: createStaticBattleSpriteSet(BATTLE_3D_SPRITE_SRC.pig_spear),
 };
 
 export default function KungFuDuelPrototype() {
@@ -210,6 +223,7 @@ export default function KungFuDuelPrototype() {
   const [lastPlayerAttackDirection, setLastPlayerAttackDirection] = useState<Direction | null>(null);
   const [lastPlayerDefenseDirection, setLastPlayerDefenseDirection] = useState<Direction | null>(null);
   const [battleFrameScale, setBattleFrameScale] = useState(1);
+  const [battleFrameHeight, setBattleFrameHeight] = useState(BATTLE_FRAME_HEIGHT);
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [musicUnlocked, setMusicUnlocked] = useState(false);
 
@@ -232,15 +246,19 @@ export default function KungFuDuelPrototype() {
   const activeAvailability = battle
     ? canUseActiveSkill(battle.player, "player", playerContext)
     : { ready: false, reason: "Start a duel" };
-  const tripleAvailability = battle
+  const tripleBlockedByTieActive = Boolean(battle?.pending?.playerTieActive);
+  const baseTripleAvailability = battle
     ? canUseTripleStrike(battle.player, "player", playerContext)
     : { ready: false, reason: "Start a duel" };
+  const tripleAvailability = tripleBlockedByTieActive
+    ? { ready: false, reason: "Active skill in use" }
+    : baseTripleAvailability;
   const secondsLeft = battle?.phaseEndsAt ? Math.min(battle.phaseDuration, Math.max(0, Math.ceil((battle.phaseEndsAt - now) / 1000))) : 0;
   const timerPercent = battle?.phaseEndsAt
     ? Math.max(0, Math.min(100, ((battle.phaseEndsAt - now) / (battle.phaseDuration * 1000)) * 100))
     : 0;
   const playerMaxLanes = battle?.phase === "lanes" ? playerLaneCount(battle, playerUseActive, playerUseTriple) : 1;
-  const laneBaseTitle = battle?.pending?.attacker === "ai" ? "Block Lane" : playerMaxLanes > 1 ? "Choose Lanes" : "Choose Lane";
+  const laneBaseTitle = battle?.pending?.attacker === "ai" ? "Evade Lane" : playerMaxLanes > 1 ? "Choose Lanes" : "Choose Lane";
   const laneTitle =
     battle?.phase === "lanes"
       ? `${laneBaseTitle} (${playerLaneDirections.length}/${playerMaxLanes} selected)`
@@ -258,7 +276,9 @@ export default function KungFuDuelPrototype() {
     function resizeBattleFrame() {
       const safeWidth = Math.max(280, window.innerWidth - 16);
       const safeHeight = Math.max(500, window.innerHeight - 16);
-      setBattleFrameScale(Math.min(safeWidth / BATTLE_FRAME_WIDTH, safeHeight / BATTLE_FRAME_HEIGHT, 1));
+      const scale = Math.min(safeWidth / BATTLE_FRAME_WIDTH, safeHeight / BATTLE_FRAME_HEIGHT, 1);
+      setBattleFrameScale(scale);
+      setBattleFrameHeight(Math.max(BATTLE_FRAME_HEIGHT, Math.floor(safeHeight / scale)));
     }
 
     resizeBattleFrame();
@@ -346,6 +366,8 @@ export default function KungFuDuelPrototype() {
         finishTieBreak(false);
       } else if (battle.phase === "lanes") {
         resolveLanePhase();
+      } else if (battle.phase === "lane_result") {
+        finishLaneResult();
       }
     }, delay);
 
@@ -384,7 +406,7 @@ export default function KungFuDuelPrototype() {
     setPlayerMove(move);
   }
 
-  function finishClash(move: ClashMove, autoPicked: boolean) {
+  function finishClash(move: ClashMove, autoPicked: boolean, lockedIn = false) {
     if (!battle || battle.phase !== "clash" || !battle.pending) {
       return;
     }
@@ -396,7 +418,9 @@ export default function KungFuDuelPrototype() {
     const status = attacker === "player" ? "attack" : attacker === "ai" ? "defend" : "tie";
     const baseLog = autoPicked
       ? `Time expired. Player had no clash move, so AI auto-picked ${move.toUpperCase()}.`
-      : `Time expired. Player final clash move is ${move.toUpperCase()}.`;
+      : lockedIn
+        ? `Player locked in ${move.toUpperCase()}.`
+        : `Time expired. Player final clash move is ${move.toUpperCase()}.`;
     const clashReveal = createClashReveal(battle.round, move, battle.pending.aiDecision.move, clash, attacker);
 
     if (clash === "tie") {
@@ -525,7 +549,7 @@ export default function KungFuDuelPrototype() {
       guaranteedAttacker: null,
     });
 
-    completeRound(result, [
+    completeTieRound(result, [
       {
         round: battle.round,
         text: playerReady && aiReady ? "Both Flying Swallow Returns cancel. The clash remains tied." : "No Flying Swallow Return. The clash remains tied.",
@@ -613,7 +637,7 @@ export default function KungFuDuelPrototype() {
   }
 
   function armPlayerTriple() {
-    if (!battle || battle.phase !== "lanes" || !tripleAvailability.ready) {
+    if (!battle || battle.phase !== "lanes" || tripleBlockedByTieActive || !tripleAvailability.ready) {
       return;
     }
 
@@ -714,17 +738,18 @@ export default function KungFuDuelPrototype() {
       playerLastDefenseDirection: playerSelections?.defense ?? lastPlayerDefenseDirection,
     });
     const nextStats = updateBattleStats(battle, result);
+    const now = Date.now();
 
     setBattle({
       ...battle,
-      phase: gameOver ? "game_over" : "clash",
-      phaseStartedAt: gameOver ? null : Date.now(),
-      phaseEndsAt: gameOver ? null : Date.now() + CLASH_SECONDS * 1000,
-      phaseDuration: CLASH_SECONDS,
+      phase: "lane_result",
+      phaseStartedAt: now,
+      phaseEndsAt: now + LANE_RESULT_SECONDS * 1000,
+      phaseDuration: LANE_RESULT_SECONDS,
       bulletTime: false,
       player: result.player,
       ai: result.ai,
-      round: battle.round + 1,
+      round: battle.round,
       status: gameOver ? "game_over" : result.status,
       guaranteedAttacker: result.nextGuaranteedAttacker,
       roundBanner: createRoundBanner(battle, result),
@@ -755,18 +780,110 @@ export default function KungFuDuelPrototype() {
                 tone: result.player.hp <= 0 ? ("ai" as const) : ("player" as const),
               },
             ]
-          : [
-              {
-                round: battle.round + 1,
-                text: "Next round starts. Choose a clash move within 10 seconds.",
-                tone: "system" as const,
-              },
-            ]),
+          : []),
       ],
     });
     setLastPlayerAttackDirection(playerSelections?.attack ?? lastPlayerAttackDirection);
     setLastPlayerDefenseDirection(playerSelections?.defense ?? lastPlayerDefenseDirection);
     resetRoundControls();
+  }
+
+  function completeTieRound(result: ReturnType<typeof resolveRound>, extraLogs: BattleLog[]) {
+    if (!battle) {
+      return;
+    }
+
+    const nextRound = battle.round + 1;
+    const nextAiDecision = chooseAiDecision({
+      ai: result.ai,
+      player: result.player,
+      round: nextRound,
+      playerLastAttackDirection: lastPlayerAttackDirection,
+      playerLastDefenseDirection: lastPlayerDefenseDirection,
+    });
+    const nextLogs = result.logs.map((text) => ({
+      round: battle.round,
+      text,
+      tone: text.startsWith("AI") ? ("ai" as const) : text.startsWith("Player") ? ("player" as const) : ("system" as const),
+    }));
+    const now = Date.now();
+
+    setBattle({
+      ...battle,
+      phase: "clash",
+      phaseStartedAt: now,
+      phaseEndsAt: now + CLASH_SECONDS * 1000,
+      phaseDuration: CLASH_SECONDS,
+      bulletTime: false,
+      player: result.player,
+      ai: result.ai,
+      round: nextRound,
+      status: "tie",
+      guaranteedAttacker: null,
+      roundBanner: null,
+      clashReveal: null,
+      laneReveal: null,
+      statPulse: {
+        player: null,
+        ai: null,
+      },
+      stats: updateBattleStats(battle, result),
+      pending: {
+        aiDecision: nextAiDecision,
+        playerMove: null,
+        attacker: null,
+        clash: "tie",
+        aiUseActive: false,
+        aiUseTriple: false,
+        playerTieActive: false,
+      },
+      logs: [
+        ...battle.logs,
+        ...extraLogs,
+        ...nextLogs,
+        {
+          round: nextRound,
+          text: `Next round starts. Choose a clash move within ${CLASH_SECONDS} seconds.`,
+          tone: "system" as const,
+        },
+      ],
+    });
+    resetRoundControls();
+  }
+
+  function finishLaneResult() {
+    if (!battle || battle.phase !== "lane_result") {
+      return;
+    }
+
+    const gameOver = battle.player.hp <= 0 || battle.ai.hp <= 0;
+    const now = Date.now();
+
+    setBattle({
+      ...battle,
+      phase: gameOver ? "game_over" : "clash",
+      phaseStartedAt: gameOver ? null : now,
+      phaseEndsAt: gameOver ? null : now + CLASH_SECONDS * 1000,
+      phaseDuration: gameOver ? 0 : CLASH_SECONDS,
+      round: gameOver ? battle.round : battle.round + 1,
+      status: gameOver ? "game_over" : battle.status,
+      roundBanner: gameOver ? battle.roundBanner : null,
+      laneReveal: null,
+      statPulse: {
+        player: null,
+        ai: null,
+      },
+      logs: gameOver
+        ? battle.logs
+        : [
+            ...battle.logs,
+            {
+              round: battle.round + 1,
+              text: `Next round starts. Choose a clash move within ${CLASH_SECONDS} seconds.`,
+              tone: "system" as const,
+            },
+          ],
+    });
   }
 
   function togglePlayerLaneDirection(direction: Direction) {
@@ -858,64 +975,34 @@ export default function KungFuDuelPrototype() {
         className="overflow-hidden"
         style={{
           width: BATTLE_FRAME_WIDTH * battleFrameScale,
-          height: BATTLE_FRAME_HEIGHT * battleFrameScale,
+          height: battleFrameHeight * battleFrameScale,
         }}
       >
         <div
         className="relative flex flex-col overflow-hidden border border-amber-200/15 bg-[#17130f] shadow-2xl shadow-black/40"
         style={{
           width: BATTLE_FRAME_WIDTH,
-          height: BATTLE_FRAME_HEIGHT,
+          height: battleFrameHeight,
           transform: `scale(${battleFrameScale})`,
           transformOrigin: "top left",
         }}
       >
-        <div className="sr-only">FINAL v7.5 Duel Prototype</div>
-        <section className="relative min-h-0 flex-[1.1] overflow-hidden px-3 pb-2 pt-2">
+        <div className="sr-only">FINAL v7.6 Duel Prototype</div>
+        <section className="relative min-h-0 flex-1 overflow-hidden px-2 pb-2 pt-2">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,rgba(255,196,86,0.22),transparent_26%),linear-gradient(180deg,rgba(44,33,22,0.86),rgba(18,15,12,0.98))]" />
-          <div className="relative z-10">
-            <div className="flex min-w-0 items-start justify-between gap-3">
-              <HeroStand
-                fighter={battle.player}
-                heroId={battle.playerHero}
-                facing="right"
-                tokenSize="md"
-                effect={battle.statPulse.player}
-                now={now}
-                stance={fighterStance("player", battle.status)}
-              />
-              <RoundStatusBadge round={battle.round} status={statusLabel(battle.status, winner)} />
-              <HeroStand
-                fighter={battle.ai}
-                heroId={battle.aiHero}
-                facing="left"
-                tokenSize="md"
-                effect={battle.statPulse.ai}
-                now={now}
-                stance={fighterStance("ai", battle.status)}
-              />
-            </div>
-            <BattleStage battle={battle} winner={winner} now={now} />
+          <div className="relative z-10 h-full">
+            <BattleStage battle={battle} winner={winner} now={now} playerPreviewDirections={playerLaneDirections} />
           </div>
         </section>
 
-        <section className="min-h-0 flex-[1.3] border-t border-amber-200/15 bg-[#120f0d] px-3 py-2">
+        <section className="shrink-0 border-t border-amber-200/15 bg-[#120f0d] px-2.5 py-1.5" style={{ height: BATTLE_CONTROLS_HEIGHT }}>
           {battle.phase === "game_over" ? (
             <DuelAnalysisPanel battle={battle} winner={winner} onRematch={startDuel} onBack={resetDuel} />
           ) : (
-            <>
+            <div className="flex h-full min-h-0 flex-col">
               <TimerPanel battle={battle} secondsLeft={secondsLeft} timerPercent={timerPercent} />
 
-              <ControlGroup title="Clash Move" icon={<Zap className="h-4 w-4" />}>
-                <SegmentedButtons
-                  value={playerMove}
-                  disabled={battle.phase !== "clash"}
-                  items={CLASH_MOVES.map((move) => ({ id: move.id, label: move.label }))}
-                  onChange={(value) => chooseClashMove(value as ClashMove)}
-                />
-              </ControlGroup>
-
-              <div className="mt-2 grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-[96px_1fr_96px] items-center gap-1.5">
                 <TacticButton
                   label={getHero(battle.playerHero).activeName}
                   title="Active Skill"
@@ -931,6 +1018,14 @@ export default function KungFuDuelPrototype() {
                     }
                   }}
                 />
+                <ControlGroup title="Clash" icon={<Zap className="h-3.5 w-3.5" />}>
+                  <SegmentedButtons
+                    value={playerMove}
+                    disabled={battle.phase !== "clash"}
+                    items={CLASH_MOVES.map((move) => ({ id: move.id, label: move.label }))}
+                    onChange={(value) => chooseClashMove(value as ClashMove)}
+                  />
+                </ControlGroup>
                 <TacticButton
                   label="Triple Strike"
                   title="Triple Strike"
@@ -942,48 +1037,60 @@ export default function KungFuDuelPrototype() {
                 />
               </div>
 
-              <div className="mt-3">
+              <div className="mt-1.5">
                 <ControlGroup title={laneTitle} icon={<Crosshair className="h-4 w-4" />}>
                   <div className="grid grid-cols-[50px_1fr_50px] items-center gap-1.5">
-                    <LanternStack label="PLAYER" side="player" status={battle.status} compact />
+                    <LanternStack label="PLAYER" side="player" status={battle.status} phase={battle.phase} compact />
                     <DirectionPad
                       values={playerLaneDirections}
                       maxSelections={playerMaxLanes}
                       onToggle={togglePlayerLaneDirection}
                       disabled={battle.phase !== "lanes"}
                     />
-                    <LanternStack label="AI" side="ai" status={battle.status} compact />
+                    <LanternStack label="AI" side="ai" status={battle.status} phase={battle.phase} compact />
                   </div>
                 </ControlGroup>
               </div>
 
-              <div className="mt-2 grid grid-cols-[1fr_auto_auto] gap-2">
+              <div className="mt-auto grid grid-cols-[1fr_auto_auto] gap-2 pt-1.5">
                 <Button
                   onClick={() => {
-                    if (battle.phase === "tie_break") {
+                    if (battle.phase === "clash" && playerMove) {
+                      finishClash(playerMove, false, true);
+                    } else if (battle.phase === "tie_break") {
                       finishTieBreak(false);
                     } else if (battle.phase === "lanes") {
                       resolveLanePhase();
                     }
                   }}
-                  disabled={Boolean(winner) || battle.phase === "clash"}
-                  className="h-11 rounded-md text-sm font-black"
+                  disabled={Boolean(winner) || battle.phase === "lane_result" || (battle.phase === "clash" && !playerMove)}
+                  className="h-10 rounded-md text-xs font-black"
                 >
                   <Swords className="h-5 w-5" />
-                  {battle.phase === "tie_break" ? "Skip Window" : battle.phase === "lanes" ? "Lock Lanes" : "Timer Running"}
+                  {battle.phase === "clash"
+                    ? playerMove
+                      ? "Lock Clash"
+                      : "Choose Move"
+                      : battle.phase === "tie_break"
+                        ? "Skip Window"
+                        : battle.phase === "lanes"
+                          ? "Lock Lanes"
+                          : battle.phase === "lane_result"
+                            ? "Result"
+                            : "Timer Running"}
                 </Button>
-                <MusicToggle enabled={musicEnabled} onToggle={toggleMusic} className="h-11 w-11" />
+                <MusicToggle enabled={musicEnabled} onToggle={toggleMusic} className="h-10 w-10" />
                 <Button
                   aria-label="Reset duel"
                   variant="outline"
                   size="icon"
-                  className="h-11 w-11 border-amber-200/30 bg-transparent text-amber-100 hover:bg-amber-100/10"
+                  className="h-10 w-10 border-amber-200/30 bg-transparent text-amber-100 hover:bg-amber-100/10"
                   onClick={resetDuel}
                 >
                   <RotateCcw className="h-5 w-5" />
                 </Button>
               </div>
-            </>
+            </div>
           )}
         </section>
 
@@ -1053,7 +1160,7 @@ function makeBattleState(
     logs: [
       {
         round: 0,
-        text: "Round starts. Choose a clash move within 10 seconds.",
+        text: `Round starts. Choose a clash move within ${CLASH_SECONDS} seconds.`,
         tone: "system",
       },
     ],
@@ -1162,7 +1269,7 @@ function createRadarMetrics(stats: SideBattleStats, roundsCompleted: number): Ra
   return [
     { id: "clash", label: "Clash", detail: "Clash control", value: clashScore },
     { id: "strike", label: "Strike", detail: "Hit pressure", value: strikeScore },
-    { id: "guard", label: "Guard", detail: "Defense reads", value: guardScore },
+    { id: "guard", label: "Evade", detail: "Lane reads", value: guardScore },
     { id: "energy", label: "Energy", detail: "EN flow", value: energyScore },
     { id: "skill", label: "Skill", detail: "Arts used", value: skillScore },
   ];
@@ -1234,7 +1341,7 @@ function createClashReveal(
 function HeaderBar() {
   return (
     <div className="flex h-8 shrink-0 items-center justify-center border-b border-amber-200/15 bg-black px-3 text-center text-[10px] font-black uppercase leading-none tracking-[0.16em] text-amber-100/80">
-      FINAL v7.5 Duel Prototype
+      FINAL v7.6 Duel Prototype
     </div>
   );
 }
@@ -1279,7 +1386,10 @@ function TimerPanel({
   secondsLeft: number;
   timerPercent: number;
 }) {
-  const criticalClashCountdown = battle.phase === "clash" && secondsLeft <= 1;
+  const isResultHold = battle.phase === "tie_break" || battle.phase === "lane_result";
+  const isBulletTime = battle.phase === "lanes" && battle.bulletTime;
+  const criticalClashCountdown = !isResultHold && battle.phase === "clash" && secondsLeft <= 1;
+  const progressValue = isResultHold ? 100 : timerPercent;
   const phaseText =
     battle.phase === "clash"
       ? "Choose clash move"
@@ -1289,18 +1399,24 @@ function TimerPanel({
           ? battle.bulletTime
             ? "Bullet Time lanes"
             : "Choose lanes"
-          : "Duel finished";
+          : battle.phase === "lane_result"
+            ? "Lane result"
+            : "Duel finished";
 
   return (
     <div
       className={cn(
-        "mb-2 rounded-md border bg-black/30 p-2 transition",
-        criticalClashCountdown
-          ? "animate-pulse border-red-300/80 shadow-[0_0_22px_rgba(248,113,113,0.5)]"
-          : "border-amber-200/15",
+        "mb-1.5 rounded-md border bg-black/30 px-2 py-1.5 transition",
+        isResultHold
+          ? "animate-pulse border-yellow-200/80 shadow-[0_0_22px_rgba(253,224,71,0.48)]"
+          : criticalClashCountdown
+            ? "animate-pulse border-red-300/80 shadow-[0_0_22px_rgba(248,113,113,0.5)]"
+            : isBulletTime
+              ? "border-red-300/65 shadow-[0_0_18px_rgba(248,113,113,0.34)]"
+              : "border-amber-200/15",
       )}
     >
-      <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px] font-black uppercase text-amber-100">
+      <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-black uppercase text-amber-100">
         <span className="flex items-center gap-2">
           <Hourglass className="h-3.5 w-3.5" />
           {phaseText}
@@ -1311,9 +1427,11 @@ function TimerPanel({
         </span>
       </div>
       <Progress
-        value={timerPercent}
+        value={progressValue}
         className={cn(
-          "h-2 bg-stone-900 transition",
+          "h-2 bg-stone-900 transition [&>div]:bg-orange-500",
+          isResultHold && "[&>div]:bg-yellow-300 ring-1 ring-yellow-200/70 shadow-[0_0_18px_rgba(253,224,71,0.55)]",
+          isBulletTime && "[&>div]:bg-red-500 ring-1 ring-red-300/80 shadow-[0_0_18px_rgba(248,113,113,0.7)]",
           criticalClashCountdown && "ring-1 ring-red-300/80 shadow-[0_0_18px_rgba(248,113,113,0.7)]",
         )}
       />
@@ -1372,10 +1490,10 @@ function DuelAnalysisPanel({
 
       <div className="mt-2 grid min-h-0 flex-1 grid-cols-[1fr_132px] items-center gap-2">
         <RadarChart metrics={metrics} />
-        <div className="grid gap-1.5">
+        <div className="grid gap-1">
           <AnalysisMetric label="Clash" value={clash} detail="Control" />
           <AnalysisMetric label="Strike" value={strike} detail="Hit Rate" />
-          <AnalysisMetric label="Guard" value={guard} detail="Defense" />
+          <AnalysisMetric label="Evade" value={guard} detail="Lane Reads" />
           <AnalysisMetric label="Damage" value={playerStats.damageDealt} detail="Dealt" suffix="" />
         </div>
       </div>
@@ -1456,13 +1574,15 @@ function AnalysisMetric({
   suffix?: string;
 }) {
   return (
-    <div className="rounded-md border border-amber-200/14 bg-black/28 px-2 py-1">
-      <div className="text-[9px] font-black uppercase text-amber-100/50">{label}</div>
-      <div className="text-lg font-black leading-none text-amber-100">
-        {value}
-        {suffix}
+    <div className="rounded-md border border-amber-200/14 bg-black/28 px-2 py-0.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="text-[8px] font-black uppercase leading-none text-amber-100/50">{label}</div>
+        <div className="text-base font-black leading-none text-amber-100">
+          {value}
+          {suffix}
+        </div>
       </div>
-      <div className="text-[8px] font-black uppercase text-amber-50/54">{detail}</div>
+      <div className="mt-0.5 text-[7px] font-black uppercase leading-none text-amber-50/54">{detail}</div>
     </div>
   );
 }
@@ -1506,51 +1626,102 @@ function RoundResultBanner({ banner, status }: { banner: RoundBanner | null; sta
   );
 }
 
-function BattleStage({ battle, winner, now }: { battle: BattleState; winner: string | null; now: number }) {
+function BattleStage({
+  battle,
+  winner,
+  now,
+  playerPreviewDirections,
+}: {
+  battle: BattleState;
+  winner: string | null;
+  now: number;
+  playerPreviewDirections: Direction[];
+}) {
   const stageState = getBattleStageState(battle, now);
   const status = statusLabel(battle.status, winner);
   const banner = battle.roundBanner;
+  const activeLaneReveal = battle.laneReveal && now <= battle.laneReveal.expiresAt ? battle.laneReveal : null;
+  const showLaneGrid = battle.phase === "lanes" || Boolean(activeLaneReveal);
 
   return (
-    <div className="relative mt-1.5 h-[236px] overflow-hidden rounded-md shadow-[0_0_28px_rgba(0,0,0,0.42)]">
-      <img src="/backgrounds/arena.png" alt="" className="absolute inset-0 h-full w-full object-cover object-center" />
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,6,4,0.12),rgba(8,6,4,0.02)_38%,rgba(8,6,4,0.34)),radial-gradient(circle_at_50%_70%,rgba(251,191,36,0.14),transparent_44%)]" />
-      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/42 to-transparent" />
+    <div className="relative h-full overflow-hidden rounded-md shadow-[0_0_28px_rgba(0,0,0,0.42)]">
+      <img
+        src="/backgrounds/arena-wide-lake.png"
+        alt=""
+        className="absolute inset-0 h-full w-full scale-[1.08] object-cover object-[50%_54%]"
+      />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,6,4,0.05),rgba(8,6,4,0.01)_42%,rgba(8,6,4,0.18)),radial-gradient(circle_at_50%_62%,rgba(251,191,36,0.1),transparent_42%)]" />
+      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/30 to-transparent" />
+      <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/18 to-transparent" />
 
-      <BattleStageSprite side="player" heroId={battle.playerHero} motion={stageState.playerMotion} />
-      <BattleStageSprite side="ai" heroId={battle.aiHero} motion={stageState.aiMotion} />
+      {showLaneGrid && <BattleStageLaneGrid battle={battle} reveal={activeLaneReveal} playerPreviewDirections={playerPreviewDirections} />}
+      <BattleStageSprite side="player" heroId={battle.playerHero} motion={stageState.playerMotion} reveal={activeLaneReveal} />
+      <BattleStageSprite side="ai" heroId={battle.aiHero} motion={stageState.aiMotion} reveal={activeLaneReveal} />
       <SlashTrail attacker={stageState.attacker} />
       <BattleStageEffect state={stageState} />
 
-      <div className="absolute inset-x-0 top-0 px-3 pb-6 pt-4 text-center shadow-[inset_0_72px_48px_-48px_rgba(0,0,0,0.72)]">
-        <div className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-100/58">Round Result</div>
-        <div className="mt-0.5 text-xl font-black uppercase leading-none text-amber-50">
-          {banner?.title ?? status}
-        </div>
-        <div className="mt-1 truncate text-[10px] font-bold uppercase text-amber-50/78">
-          {stageState.caption}
-        </div>
-        {banner?.delta && <div className="text-[10px] font-black uppercase text-amber-100">{banner.delta}</div>}
+      <div className="absolute left-2 top-2 z-30 w-[138px]">
+        <StageFighterHud label="PLAYER" fighter={battle.player} heroId={battle.playerHero} effect={battle.statPulse.player} now={now} align="left" />
       </div>
+      <div className="absolute right-2 top-2 z-30 w-[138px]">
+        <StageFighterHud label="AI" fighter={battle.ai} heroId={battle.aiHero} effect={battle.statPulse.ai} now={now} align="right" />
+      </div>
+      <div className="absolute left-1/2 top-2 z-30 -translate-x-1/2">
+        <RoundStatusBadge round={battle.round} status={status} />
+      </div>
+
+      <StageBattleReport battle={battle} now={now} banner={banner} status={status} caption={stageState.caption} />
     </div>
   );
 }
 
-function BattleStageSprite({ side, heroId, motion }: { side: FighterSide; heroId: HeroId; motion: BattleSpriteMotion }) {
+function BattleStageSprite({
+  side,
+  heroId,
+  motion,
+  reveal,
+}: {
+  side: FighterSide;
+  heroId: HeroId;
+  motion: BattleSpriteMotion;
+  reveal: LaneReveal | null;
+}) {
   const hero = getHero(heroId);
   const motionClass = battleSpriteMotionClass(side, motion);
   const spriteState = battleSpriteStateForMotion(motion);
   const spriteSrc = BATTLE_SPRITES[heroId]?.[spriteState];
   const fallbackSrc = hero.portraitSrc;
+  const { style, jump } = battleStageSpritePlacement(side, reveal);
+  const depthTestSprite = Boolean(BATTLE_3D_SPRITE_SRC[heroId]);
 
   return (
     <div
       className={cn(
-        "absolute bottom-0 z-10 grid h-32 w-32 place-items-center transition",
-        side === "player" ? "left-5" : "right-5",
+        "absolute z-10 grid -translate-x-1/2 -translate-y-1/2 place-items-center transition",
+        side === "player"
+          ? depthTestSprite
+            ? "h-[10.9rem] w-[10.9rem]"
+            : "h-[7.25rem] w-[7.25rem]"
+          : depthTestSprite
+            ? "h-[6.3rem] w-[6.3rem]"
+            : "h-[4.05rem] w-[4.05rem]",
         motionClass,
+        jump && "battle-lane-jump",
       )}
+      style={style}
     >
+      <span
+        className={cn(
+              "absolute left-1/2 top-[74%] -z-10 h-4 -translate-x-1/2 rounded-full bg-black/45 blur-[6px]",
+          side === "player" ? (depthTestSprite ? "w-32" : "w-[4.85rem]") : (depthTestSprite ? "w-14" : "w-11"),
+        )}
+      />
+      <span
+        className={cn(
+          "absolute inset-4 -z-10 rounded-full bg-sky-200/20 blur-xl",
+          depthTestSprite && "opacity-80",
+        )}
+      />
       {motion === "evade" && spriteSrc ? (
           <img
             src={spriteSrc}
@@ -1566,7 +1737,8 @@ function BattleStageSprite({ side, heroId, motion }: { side: FighterSide; heroId
           src={spriteSrc}
           alt={hero.displayName}
           className={cn(
-            "h-full w-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,0.48)]",
+            "h-full w-full object-contain drop-shadow-[0_18px_18px_rgba(0,0,0,0.55)]",
+            depthTestSprite && "drop-shadow-[0_20px_18px_rgba(0,0,0,0.62)]",
             side === "ai" && "scale-x-[-1]",
           )}
         />
@@ -1588,6 +1760,255 @@ function BattleStageSprite({ side, heroId, motion }: { side: FighterSide; heroId
   );
 }
 
+function StageBattleReport({
+  battle,
+  now,
+  banner,
+  status,
+  caption,
+}: {
+  battle: BattleState;
+  now: number;
+  banner: RoundBanner | null;
+  status: string;
+  caption: string;
+}) {
+  const activeClashReveal = battle.clashReveal && now <= battle.clashReveal.expiresAt ? battle.clashReveal : null;
+  const activeLaneReveal = battle.laneReveal && now <= battle.laneReveal.expiresAt ? battle.laneReveal : null;
+
+  if (activeClashReveal) {
+    const operator = activeClashReveal.clash === "tie" ? "=" : activeClashReveal.attacker === "player" ? ">" : "<";
+    const resultText =
+      activeClashReveal.clash === "tie"
+        ? "TIE"
+        : activeClashReveal.attacker === "player"
+          ? "PLAYER ATK"
+          : "AI ATK";
+    const clashTone =
+      activeClashReveal.clash === "tie"
+        ? "border-amber-100/60 text-amber-50 shadow-[0_0_24px_rgba(251,191,36,0.38)]"
+        : activeClashReveal.attacker === "player"
+          ? "border-red-100/70 text-red-50 shadow-[0_0_28px_rgba(248,113,113,0.42)]"
+          : "border-sky-100/70 text-sky-50 shadow-[0_0_28px_rgba(56,189,248,0.42)]";
+
+    return (
+      <div className="absolute left-2 top-[136px] z-30">
+        <div className={cn("w-[138px] rounded-md border bg-black/95 px-2 py-1.5 text-center ring-1 ring-black/80", clashTone)}>
+          <div className="flex items-center justify-between gap-1">
+            <div className="min-w-0 text-left">
+              <div className="text-[7px] font-black uppercase leading-none tracking-[0.16em] text-amber-100/78">Clash</div>
+              <div className="mt-1 text-[10px] font-black uppercase leading-none tracking-[0.08em] text-white">{resultText}</div>
+            </div>
+            <div className="flex shrink-0 items-center justify-center gap-1">
+              <ClashMoveBadge move={activeClashReveal.playerMove} size="sm" selected />
+              <span className="min-w-3 text-lg font-black leading-none text-current drop-shadow-[0_0_8px_rgba(255,255,255,0.45)]">{operator}</span>
+              <ClashMoveBadge move={activeClashReveal.aiMove} size="sm" selected />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const title = activeLaneReveal ? laneResultLabel(activeLaneReveal.result) : banner?.title ?? status;
+  const detail = activeLaneReveal ? stageLaneCaption(activeLaneReveal) : caption;
+  const isHit = activeLaneReveal?.result === "hit";
+  const reportTone = activeLaneReveal
+    ? isHit
+      ? "border-red-100/70 text-red-50 shadow-[0_0_28px_rgba(248,113,113,0.46)]"
+      : "border-sky-100/70 text-sky-50 shadow-[0_0_28px_rgba(56,189,248,0.42)]"
+    : "border-amber-100/50 text-amber-50 shadow-[0_0_22px_rgba(251,191,36,0.28)]";
+
+  return (
+    <div className="absolute left-2 top-[136px] z-30">
+      <div className={cn("w-[138px] rounded-md border bg-black/95 px-2 py-1.5 text-center ring-1 ring-black/80", reportTone)}>
+        <div className="flex items-center justify-center gap-1.5">
+          {activeLaneReveal ? (
+            <span
+              className={cn(
+                "grid h-6 w-6 place-items-center rounded-full border bg-black text-current",
+                isHit ? "border-red-100/70 shadow-[0_0_16px_rgba(248,113,113,0.5)]" : "border-sky-100/70 shadow-[0_0_16px_rgba(56,189,248,0.45)]",
+              )}
+            >
+              {isHit ? <Swords className="h-3.5 w-3.5" /> : <Zap className="h-3.5 w-3.5" />}
+            </span>
+          ) : null}
+          <div className="text-lg font-black uppercase leading-none text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.38)]">{title}</div>
+        </div>
+        <div className="mx-auto mt-1 line-clamp-2 max-w-[124px] text-[7px] font-black uppercase leading-tight tracking-[0.03em] text-amber-50/86">{detail}</div>
+        {banner?.delta && <div className="mt-0.5 text-[8px] font-black uppercase leading-none text-amber-100">{banner.delta}</div>}
+      </div>
+    </div>
+  );
+}
+
+function BattleStageLaneGrid({
+  battle,
+  reveal,
+  playerPreviewDirections,
+}: {
+  battle: BattleState;
+  reveal: LaneReveal | null;
+  playerPreviewDirections: Direction[];
+}) {
+  const attacker = reveal?.attacker ?? battle.pending?.attacker ?? null;
+  const defender = attacker === "player" ? "ai" : attacker === "ai" ? "player" : null;
+  const playerAttackDirections =
+    reveal?.attacker === "ai"
+      ? reveal.aiDirections
+      : [];
+  const playerEvadeDirections =
+    reveal?.attacker === "ai"
+      ? reveal.playerDirections
+      : !reveal && battle.phase === "lanes" && battle.pending?.attacker === "ai"
+        ? playerPreviewDirections
+        : [];
+  const aiAttackDirections =
+    reveal?.attacker === "player"
+      ? reveal.playerDirections
+      : !reveal && battle.phase === "lanes" && battle.pending?.attacker === "player"
+        ? playerPreviewDirections
+        : [];
+  const aiEvadeDirections = reveal?.attacker === "player" ? reveal.aiDirections : [];
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-[12]">
+      <LaneGridSet
+        side="player"
+        attackDirections={playerAttackDirections}
+        evadeDirections={playerEvadeDirections}
+        active={defender === "player"}
+        reveal={reveal}
+      />
+      <LaneGridSet
+        side="ai"
+        attackDirections={aiAttackDirections}
+        evadeDirections={aiEvadeDirections}
+        active={defender === "ai"}
+        reveal={reveal}
+      />
+    </div>
+  );
+}
+
+function LaneGridSet({
+  side,
+  attackDirections,
+  evadeDirections,
+  active,
+  reveal,
+}: {
+  side: FighterSide;
+  attackDirections: Direction[];
+  evadeDirections: Direction[];
+  active: boolean;
+  reveal: LaneReveal | null;
+}) {
+  const cellSizeClass = side === "player" ? "h-9 w-9" : "h-8 w-8";
+
+  return (
+    <>
+      {DIRECTIONS.map((direction) => {
+        const attackSelected = attackDirections.includes(direction.id);
+        const evadeSelected = evadeDirections.includes(direction.id);
+        const overlap = Boolean(reveal && attackSelected && evadeSelected);
+        const selected = attackSelected || evadeSelected;
+        const point = laneStagePoint(side, direction.id);
+
+        return (
+          <div
+            key={`${side}-${direction.id}`}
+            className={cn(
+              "absolute grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-md border text-[8px] font-black uppercase transition",
+              cellSizeClass,
+              active
+                ? "border-amber-100/40 bg-black/24 text-amber-50/66"
+                : side === "player"
+                  ? "border-sky-100/18 bg-sky-500/5 text-sky-50/25"
+                  : "border-red-100/18 bg-red-500/5 text-red-50/25",
+              attackSelected && "lane-cell-selected scale-115 border-white bg-black text-white shadow-[0_0_26px_rgba(255,255,255,0.58)]",
+              evadeSelected && "lane-cell-selected scale-115 border-red-100 bg-red-600 text-white shadow-[0_0_28px_rgba(248,113,113,0.82)]",
+              overlap && "scale-125 border-amber-100 bg-red-500 text-white shadow-[0_0_34px_rgba(251,191,36,0.92),0_0_24px_rgba(248,113,113,0.86)]",
+              selected && "z-20",
+            )}
+            style={{ left: `${point.x}%`, top: `${point.y}%` }}
+          >
+            {overlap ? "HIT" : shortDirectionLabel(direction.id)}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function battleStageSpritePlacement(side: FighterSide, reveal: LaneReveal | null): { style: CSSProperties; jump: boolean } {
+  if (!reveal) {
+    const point = side === "player" ? { x: 31, y: 72 } : { x: 69, y: 52 };
+    return { style: { left: `${point.x}%`, top: `${point.y}%` }, jump: false };
+  }
+
+  const primary = primaryRevealDirection(side, reveal);
+  const from = laneStagePoint(side, primary);
+  const jump = reveal.attacker === side;
+
+  if (!jump) {
+    return { style: { left: `${from.x}%`, top: `${from.y}%` }, jump: false };
+  }
+
+  const targetSide = side === "player" ? "ai" : "player";
+  const to = laneStagePoint(targetSide, primary);
+  return {
+    style: {
+      left: `${from.x}%`,
+      top: `${from.y}%`,
+      "--lane-from-x": `${from.x}%`,
+      "--lane-from-y": `${from.y}%`,
+      "--lane-to-x": `${to.x}%`,
+      "--lane-to-y": `${to.y}%`,
+    } as CSSProperties,
+    jump: true,
+  };
+}
+
+function primaryRevealDirection(side: FighterSide, reveal: LaneReveal): Direction {
+  const directions = side === "player" ? reveal.playerDirections : reveal.aiDirections;
+
+  if (reveal.result === "hit" && reveal.attacker) {
+    const attackerDirections = reveal.attacker === "player" ? reveal.playerDirections : reveal.aiDirections;
+    const defenderDirections = reveal.attacker === "player" ? reveal.aiDirections : reveal.playerDirections;
+    const hitDirection = attackerDirections.find((direction) => defenderDirections.includes(direction));
+
+    if (hitDirection) {
+      return hitDirection;
+    }
+  }
+
+  return directions[0] ?? "center";
+}
+
+function laneStagePoint(side: FighterSide, direction: Direction): { x: number; y: number } {
+  const center = side === "player" ? { x: 31, y: 72 } : { x: 69, y: 52 };
+  const offset: Record<Direction, { x: number; y: number }> =
+    side === "player"
+      ? {
+          high: { x: 2, y: -11 },
+          low: { x: -2, y: 12 },
+          left: { x: -13, y: 1 },
+          right: { x: 13, y: -2 },
+          center: { x: 0, y: 0 },
+        }
+      : {
+          high: { x: 2, y: -9 },
+          low: { x: -2, y: 10 },
+          left: { x: -11, y: 1 },
+          right: { x: 11, y: -2 },
+          center: { x: 0, y: 0 },
+        };
+  const delta = offset[direction];
+
+  return { x: center.x + delta.x, y: center.y + delta.y };
+}
+
 function BattleStageEffect({ state }: { state: BattleStageVisualState }) {
   if (state.effect === "none") {
     return null;
@@ -1604,12 +2025,6 @@ function BattleStageEffect({ state }: { state: BattleStageVisualState }) {
   if (state.effect === "hit") {
     return (
       <div className={cn("battle-impact-pop absolute top-[56%] z-20 h-14 w-14 -translate-y-1/2 rounded-full border-4 border-red-100/85 bg-red-500/30 shadow-[0_0_32px_rgba(248,113,113,0.78)]", targetSide)} />
-    );
-  }
-
-  if (state.effect === "block") {
-    return (
-      <div className={cn("battle-impact-pop absolute top-[57%] z-20 h-16 w-16 -translate-y-1/2 rounded-full border-4 border-amber-100/85 bg-amber-300/18 shadow-[0_0_30px_rgba(251,191,36,0.7)]", targetSide)} />
     );
   }
 
@@ -1650,14 +2065,12 @@ function getBattleStageState(battle: BattleState, now: number): BattleStageVisua
     const defenderMotion: BattleSpriteMotion =
       activeLaneReveal.result === "hit"
         ? "hit"
-        : activeLaneReveal.result === "evade" || activeLaneReveal.result === "miss"
-          ? "evade"
-          : "block";
+        : "evade";
 
     return {
       playerMotion: activeLaneReveal.attacker === "player" ? "attack" : defender === "player" ? defenderMotion : "idle",
       aiMotion: activeLaneReveal.attacker === "ai" ? "attack" : defender === "ai" ? defenderMotion : "idle",
-      effect: activeLaneReveal.result === "hit" ? "hit" : defenderMotion === "evade" ? "evade" : "block",
+      effect: activeLaneReveal.result === "hit" ? "hit" : "evade",
       effectSide: defender,
       attacker: activeLaneReveal.attacker,
       caption: stageLaneCaption(activeLaneReveal),
@@ -1677,8 +2090,8 @@ function getBattleStageState(battle: BattleState, now: number): BattleStageVisua
 
   if (activeClashReveal?.attacker) {
     return {
-      playerMotion: activeClashReveal.attacker === "player" ? "attack" : "block",
-      aiMotion: activeClashReveal.attacker === "ai" ? "attack" : "block",
+      playerMotion: activeClashReveal.attacker === "player" ? "attack" : "evade",
+      aiMotion: activeClashReveal.attacker === "ai" ? "attack" : "evade",
       effect: "none",
       effectSide: null,
       attacker: activeClashReveal.attacker,
@@ -1687,8 +2100,8 @@ function getBattleStageState(battle: BattleState, now: number): BattleStageVisua
   }
 
   return {
-    playerMotion: fighterStance("player", battle.status) === "attack" ? "attack" : fighterStance("player", battle.status) === "defend" ? "block" : "idle",
-    aiMotion: fighterStance("ai", battle.status) === "attack" ? "attack" : fighterStance("ai", battle.status) === "defend" ? "block" : "idle",
+    playerMotion: fighterStance("player", battle.status) === "attack" ? "attack" : fighterStance("player", battle.status) === "defend" ? "evade" : "idle",
+    aiMotion: fighterStance("ai", battle.status) === "attack" ? "attack" : fighterStance("ai", battle.status) === "defend" ? "evade" : "idle",
     effect: "none",
     effectSide: null,
     attacker: battle.status === "attack" ? "player" : battle.status === "defend" ? "ai" : null,
@@ -1746,6 +2159,16 @@ function createBattleSpriteSet(heroId: HeroId): Record<BattleSpriteAssetState, s
   );
 }
 
+function createStaticBattleSpriteSet(src: string): Record<BattleSpriteAssetState, string> {
+  return BATTLE_SPRITE_STATES.reduce(
+    (sprites, state) => ({
+      ...sprites,
+      [state]: src,
+    }),
+    {} as Record<BattleSpriteAssetState, string>,
+  );
+}
+
 function stageLaneCaption(reveal: LaneReveal): string {
   if (!reveal.attacker) {
     return "The exchange resolves at center stage.";
@@ -1757,22 +2180,70 @@ function stageLaneCaption(reveal: LaneReveal): string {
     return `${sideLabel(reveal.attacker)} attacks. ${sideLabel(defender)} takes ${reveal.damage} HP.`;
   }
 
-  if (reveal.result === "evade" || reveal.result === "miss") {
-    return `${sideLabel(defender)} evades the attack.`;
-  }
-
-  return `${sideLabel(defender)} blocks the attack.`;
+  return `${sideLabel(defender)} evades. The attack misses.`;
 }
 
 function HowToPlay() {
+  const [open, setOpen] = useState(false);
+  const clashRules = [
+    { from: "CHARGE", to: "SIDESTEP" },
+    { from: "SIDESTEP", to: "COUNTER" },
+    { from: "COUNTER", to: "CHARGE" },
+  ];
+  const steps = [
+    { title: "WIN CLASH", detail: "Win Charge, Sidestep, or Counter to become the attacker." },
+    { title: "BECOME ATTACKER", detail: "The clash winner controls the strike for this round." },
+    { title: "CHOOSE LANE", detail: "Pick your lane before the timer ends." },
+    { title: "HIT OR MISS", detail: "Matched attack and evade lanes hit. Different lanes miss." },
+    { title: "GAIN EN", detail: "Build Energy through duel actions." },
+    { title: "USE SKILLS", detail: "Spend EN when Active Skill or Triple Strike lights up." },
+    { title: "WIN THE DUEL", detail: "Reduce the opponent's HP to 0." },
+  ];
+
   return (
     <div className="rounded-md border border-amber-200/15 bg-black/25 px-3 py-1.5">
-      <div className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-100/50">How to Play</div>
-      <div className="mt-1 grid gap-0.5 text-[10px] font-bold text-amber-50/85">
-        <div>Win the clash to attack.</div>
-        <div>Pick lanes to hit, block, or evade.</div>
-        <div>Build EN for Active Skill or Triple Strike.</div>
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+        aria-expanded={open}
+      >
+        <span>
+          <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-amber-100/50">How to Play</span>
+          <span className="mt-0.5 block text-[10px] font-bold uppercase text-amber-50/82">
+            Win clash, choose lane, build EN, use skills.
+          </span>
+        </span>
+        {open ? <ChevronUp className="h-4 w-4 text-amber-100/70" /> : <ChevronDown className="h-4 w-4 text-amber-100/70" />}
+      </button>
+
+      {open && (
+        <div className="mt-2 border-t border-amber-200/12 pt-2">
+          <div className="rounded border border-amber-200/15 bg-stone-950/50 px-2 py-1.5">
+            <div className="mb-1 text-[9px] font-black uppercase tracking-[0.12em] text-amber-100/55">Clash Rules</div>
+            <div className="grid gap-1">
+              {clashRules.map((rule) => (
+                <div key={`${rule.from}-${rule.to}`} className="flex items-center gap-1.5 text-[9px] font-black uppercase text-amber-50">
+                  <span className="min-w-16 rounded border border-amber-200/20 bg-black/35 px-1.5 py-0.5 text-center">{rule.from}</span>
+                  <span className="text-amber-100/70">beats</span>
+                  <span className="min-w-16 rounded border border-amber-200/20 bg-black/35 px-1.5 py-0.5 text-center">{rule.to}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-2 grid grid-cols-2 gap-1.5">
+            {steps.map((step, index) => (
+              <div key={step.title} className={cn("rounded border border-amber-200/12 bg-black/20 px-2 py-1", index === steps.length - 1 && "col-span-2")}>
+                <div className="text-[9px] font-black uppercase text-amber-50">
+                  {index + 1}. {step.title}
+                </div>
+                <div className="mt-0.5 text-[9px] font-bold leading-snug text-amber-100/68">{step.detail}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1914,6 +2385,63 @@ function RoundStatusBadge({ round, status }: { round: number; status: string }) 
     >
       <span className="text-sm font-black uppercase leading-none">R{round}</span>
       <span className="text-[9px] font-black uppercase">{duelSurge ? "Duel Surge" : surgeWarning ? "Surge Soon" : status}</span>
+    </div>
+  );
+}
+
+function StageFighterHud({
+  label,
+  fighter,
+  heroId,
+  effect,
+  now,
+  align,
+}: {
+  label: string;
+  fighter: FighterState;
+  heroId: HeroId;
+  effect?: StatPulse | null;
+  now: number;
+  align: "left" | "right";
+}) {
+  const hero = getHero(heroId);
+  const activeEffect = effect && now <= effect.expiresAt ? effect : null;
+  const pulseTone = activeEffect?.hpDelta && activeEffect.hpDelta < 0 ? "hp" : activeEffect?.energyDelta && activeEffect.energyDelta > 0 ? "energy" : null;
+
+  return (
+    <div
+      className={cn(
+        "rounded-md border border-amber-200/26 bg-black p-1 shadow-[0_0_20px_rgba(0,0,0,0.72)]",
+        align === "right" && "text-right",
+      )}
+    >
+      <div className={cn("flex items-start gap-1", align === "right" && "flex-row-reverse")}>
+        <HeroToken heroId={heroId} elementId={fighter.elementId} size="md" pulseTone={pulseTone} />
+        <div className="min-w-0 flex-1">
+          <div className="text-[7px] font-black uppercase tracking-[0.1em] text-sky-100/75">{label}</div>
+          <div className="truncate text-[11px] font-black leading-tight text-amber-50">{hero.displayName}</div>
+          <div className="truncate text-[8px] font-bold leading-tight text-amber-100/68">{hero.activeName}</div>
+        </div>
+      </div>
+      <div className="mt-0.5 space-y-0.5">
+        <Meter label="HP" value={fighter.hp} max={fighter.maxHp} />
+        <Meter label="EN" value={fighter.energy} max={MAX_ENERGY} />
+      </div>
+      <div className="mt-0.5 grid grid-cols-2 gap-1">
+        <StageHudStat icon={<Swords className="h-3 w-3" />} value={`${fighter.combo}/3`} />
+        <StageHudStat icon={<Shield className="h-3 w-3" />} value={`${fighter.evade}/3`} />
+        {fighter.spearCharged && <span>Charged</span>}
+        {fighter.needleJammed && <span>Jam</span>}
+      </div>
+    </div>
+  );
+}
+
+function StageHudStat({ icon, value }: { icon: ReactNode; value: string }) {
+  return (
+    <div className="flex h-6 items-center justify-center gap-1 rounded-md border border-amber-200/18 bg-black/35 text-[8px] font-black text-amber-50 shadow-inner">
+      <span className="text-amber-100/78">{icon}</span>
+      <span>{value}</span>
     </div>
   );
 }
@@ -2195,30 +2723,60 @@ function HeroToken({
   );
 }
 
-function LanternStack({ label, side, status, compact = false }: { label: string; side: FighterSide; status: BattleStatus; compact?: boolean }) {
-  const sideStatus = status === "game_over" ? "tie" : side === "player" ? status : status === "attack" ? "defend" : status === "defend" ? "attack" : "tie";
+function LanternStack({
+  label,
+  side,
+  status,
+  phase,
+  compact = false,
+}: {
+  label: string;
+  side: FighterSide;
+  status: BattleStatus;
+  phase: BattlePhase;
+  compact?: boolean;
+}) {
+  const sideStatus =
+    phase === "clash" || status === "game_over"
+      ? null
+      : phase === "tie_break"
+        ? "tie"
+      : side === "player"
+        ? status === "defend"
+          ? "evade"
+          : status
+        : status === "attack"
+          ? "evade"
+          : status === "defend"
+            ? "attack"
+            : "tie";
+  const items = [
+    { id: "attack", label: "ATTACK" },
+    { id: "tie", label: "TIE" },
+    { id: "evade", label: "EVADE" },
+  ] as const;
 
   return (
     <div className="grid gap-1">
       <div className="text-center text-[9px] font-black uppercase tracking-[0.08em] text-amber-100/70">{label}</div>
-      {(["attack", "tie", "defend"] as const).map((item) => {
-        const active = item === sideStatus;
+      {items.map((item) => {
+        const active = item.id === sideStatus;
 
         return (
           <div
-            key={item}
+            key={item.id}
             className={cn(
               "relative grid place-items-center overflow-hidden rounded-full border font-black uppercase shadow-inner transition duration-200",
               compact ? "h-9 text-[8px]" : "h-14 text-[11px]",
               active
                 ? side === "player"
-                  ? "scale-[1.04] border-red-200 bg-red-500/70 text-white shadow-[0_0_20px_rgba(248,113,113,0.65)]"
-                  : "scale-[1.04] border-amber-100 bg-amber-300/80 text-stone-950 shadow-[0_0_20px_rgba(251,191,36,0.65)]"
+                  ? "lantern-active-glow scale-[1.04] border-red-200 bg-red-500/70 text-white shadow-[0_0_20px_rgba(248,113,113,0.65)]"
+                  : "lantern-active-glow scale-[1.04] border-amber-100 bg-amber-300/80 text-stone-950 shadow-[0_0_20px_rgba(251,191,36,0.65)]"
                 : "border-amber-200/15 bg-black/30 text-amber-100/32 opacity-70",
             )}
           >
             {active && <span className="absolute inset-x-2 top-1 h-1 rounded-full bg-white/70 blur-sm animate-pulse" />}
-            {item}
+            {item.label}
           </div>
         );
       })}
@@ -2229,7 +2787,7 @@ function LanternStack({ label, side, status, compact = false }: { label: string;
 function ControlGroup({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
   return (
     <div>
-      <div className="mb-1.5 flex items-center gap-2 text-[11px] font-black uppercase text-amber-100">
+      <div className="mb-1 flex items-center gap-1.5 text-[10px] font-black uppercase text-amber-100">
         {icon}
         <span>{title}</span>
       </div>
@@ -2245,29 +2803,142 @@ function SegmentedButtons({
   disabled,
 }: {
   value: string | null;
-  items: { id: string; label: string }[];
+  items: { id: ClashMove; label: string }[];
   onChange: (value: string) => void;
   disabled?: boolean;
 }) {
+  const positionClass: Record<string, string> = {
+    charge: "col-start-2 row-start-1",
+    sidestep: "col-start-1 row-start-2",
+    counter: "col-start-3 row-start-2",
+  };
+
   return (
-    <div className="grid grid-cols-3 gap-2">
-      {items.map((item) => (
+    <div className="relative mx-auto grid max-w-40 grid-cols-3 grid-rows-2 gap-x-1.5 gap-y-1">
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 160 84"
+        className="pointer-events-none absolute inset-0 z-0 h-full w-full overflow-visible"
+      >
+        <defs>
+          <marker id="clash-arrowhead" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto">
+            <path d="M0,0 L7,3.5 L0,7 Z" fill="rgba(253, 230, 138, 0.78)" />
+          </marker>
+        </defs>
+        <path
+          d="M68 34 L43 52"
+          fill="none"
+          stroke="rgba(253, 230, 138, 0.64)"
+          strokeWidth="2"
+          strokeLinecap="round"
+          markerEnd="url(#clash-arrowhead)"
+        />
+        <path
+          d="M51 64 L110 64"
+          fill="none"
+          stroke="rgba(253, 230, 138, 0.64)"
+          strokeWidth="2"
+          strokeLinecap="round"
+          markerEnd="url(#clash-arrowhead)"
+        />
+        <path
+          d="M116 52 L92 34"
+          fill="none"
+          stroke="rgba(253, 230, 138, 0.64)"
+          strokeWidth="2"
+          strokeLinecap="round"
+          markerEnd="url(#clash-arrowhead)"
+        />
+      </svg>
+      {items.map((item) => {
+        const selected = value === item.id;
+
+        return (
         <button
           key={item.id}
           type="button"
+          title={item.label}
           disabled={disabled}
           onClick={() => onChange(item.id)}
           className={cn(
-            "h-9 rounded-md border text-[11px] font-black transition duration-150 disabled:cursor-not-allowed disabled:opacity-45",
-            value === item.id
-              ? "command-confirm-pulse scale-[1.08] border-amber-100 bg-amber-300 text-stone-950 shadow-[0_0_24px_rgba(251,191,36,0.65)] brightness-125"
+            "relative z-10 grid h-11 w-full place-items-center rounded-full border leading-none transition duration-150 disabled:cursor-not-allowed disabled:opacity-45",
+            positionClass[item.id] ?? "",
+            selected
+              ? "clash-choice-selected scale-[1.08] border-amber-100 bg-amber-300 text-stone-950 shadow-[0_0_24px_rgba(251,191,36,0.65)] brightness-125"
               : "border-amber-200/20 bg-black/25 text-amber-100 hover:bg-amber-100/10",
           )}
         >
-          {item.label}
+          {!disabled && !selected && <span className="clash-choice-ring absolute inset-0 rounded-full border border-amber-100/65" />}
+          {selected && <span className="absolute inset-0 rounded-full bg-amber-100/20 blur-sm" />}
+          <ClashMoveBadge move={item.id} size="sm" selected={selected} />
         </button>
-      ))}
+        );
+      })}
     </div>
+  );
+}
+
+function ClashMoveBadge({
+  move,
+  size = "sm",
+  selected = false,
+}: {
+  move: ClashMove;
+  size?: "sm" | "md";
+  selected?: boolean;
+}) {
+  const tone = {
+    charge: "border-amber-100/80 bg-[radial-gradient(circle_at_50%_42%,rgba(253,230,138,0.88),rgba(180,83,9,0.88)_58%,rgba(24,20,14,0.94))] text-stone-950 shadow-[0_0_18px_rgba(251,191,36,0.58)]",
+    sidestep: "border-sky-100/80 bg-[radial-gradient(circle_at_50%_42%,rgba(125,211,252,0.88),rgba(2,132,199,0.84)_58%,rgba(8,18,30,0.95))] text-sky-50 shadow-[0_0_18px_rgba(56,189,248,0.5)]",
+    counter: "border-red-100/80 bg-[radial-gradient(circle_at_50%_42%,rgba(252,165,165,0.9),rgba(185,28,28,0.86)_58%,rgba(28,10,10,0.96))] text-red-50 shadow-[0_0_18px_rgba(248,113,113,0.5)]",
+  }[move];
+  const iconClass = size === "md" ? "h-10 w-10" : "h-8 w-8";
+
+  return (
+    <span
+      className={cn(
+        "relative grid shrink-0 place-items-center overflow-hidden rounded-full border bg-black",
+        iconClass,
+        tone,
+        selected && "ring-1 ring-white/70",
+      )}
+    >
+      <img src={CLASH_ICON_SRC[move]} alt="" className="absolute inset-0 h-full w-full rounded-full object-cover" />
+      <span className="absolute inset-0 rounded-full border border-white/28 shadow-[inset_0_0_10px_rgba(0,0,0,0.45)]" />
+      <span className="sr-only">{clashMoveLabel(move)}</span>
+    </span>
+  );
+}
+
+const CLASH_ICON_SRC: Record<ClashMove, string> = {
+  charge: "/clash-icons/charge.png",
+  sidestep: "/clash-icons/sidestep.png",
+  counter: "/clash-icons/counter.png",
+};
+
+function ClashMoveGlyph({ move }: { move: ClashMove }) {
+  if (move === "charge") {
+    return (
+      <svg viewBox="0 0 32 32" className="relative h-5 w-5 drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)]" aria-hidden="true">
+        <path d="M5 20h11l-3 5 13-12H15l3-6L5 20Z" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  if (move === "sidestep") {
+    return (
+      <svg viewBox="0 0 32 32" className="relative h-5 w-5 drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)]" aria-hidden="true">
+        <path d="M8 11c5-5 13-4 16 1l-3 1 7 4 1-8-3 2C22 4 11 4 5 10l3 1Z" fill="currentColor" />
+        <path d="M24 21c-5 5-13 4-16-1l3-1-7-4-1 8 3-2c4 7 15 7 21 1l-3-1Z" fill="currentColor" opacity="0.82" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 32 32" className="relative h-5 w-5 drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)]" aria-hidden="true">
+      <path d="M7 22c6-1 10-4 12-10l-4 1 7-8 3 10-3-2c-3 8-8 12-15 13v-4Z" fill="currentColor" />
+      <path d="M8 8l16 16" stroke="currentColor" strokeWidth="3" strokeLinecap="round" opacity="0.86" />
+    </svg>
   );
 }
 
@@ -2297,7 +2968,7 @@ function TacticButton({
       title={ready ? label : reason}
       onClick={onClick}
       className={cn(
-        "min-h-12 rounded-md border px-2.5 py-1.5 text-left transition disabled:cursor-not-allowed",
+        "min-h-10 rounded-md border px-2 py-1 text-left transition disabled:cursor-not-allowed",
         ready
           ? active
             ? "border-sky-100 bg-sky-300 text-stone-950 shadow-[0_0_24px_rgba(125,211,252,0.48)]"
@@ -2306,11 +2977,11 @@ function TacticButton({
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-black uppercase">{title}</span>
-        <span className="rounded border border-current px-1.5 py-0.5 text-[9px] font-black">{cost}</span>
+        <span className="text-[8px] font-black uppercase leading-none">{title}</span>
+        <span className="rounded border border-current px-1 py-0.5 text-[8px] font-black leading-none">{cost}</span>
       </div>
-      <div className="mt-0.5 line-clamp-1 text-xs font-black">{label}</div>
-      <div className="mt-0.5 line-clamp-1 text-[9px] font-black uppercase opacity-80">{status}</div>
+      <div className="mt-0.5 line-clamp-1 text-[10px] font-black leading-tight">{label}</div>
+      <div className="mt-0.5 line-clamp-1 text-[8px] font-black uppercase leading-none opacity-80">{status}</div>
     </button>
   );
 }
@@ -2327,15 +2998,15 @@ function DirectionPad({
   disabled?: boolean;
 }) {
   return (
-    <div className="mx-auto grid max-w-44 grid-cols-3 gap-1.5">
+    <div className="mx-auto grid w-full max-w-52 grid-cols-3 gap-1">
       <span />
-      <DirectionButton direction="high" values={values} onToggle={onToggle} icon={<ArrowUp className="h-4 w-4" />} disabled={disabled} maxSelections={maxSelections} />
+      <DirectionButton direction="high" values={values} onToggle={onToggle} icon={<ArrowUp className="h-4 w-4" />} disabled={disabled} maxSelections={maxSelections} wide />
       <span />
       <DirectionButton direction="left" values={values} onToggle={onToggle} icon={<ArrowLeft className="h-4 w-4" />} disabled={disabled} maxSelections={maxSelections} />
       <DirectionButton direction="center" values={values} onToggle={onToggle} icon={<Crosshair className="h-4 w-4" />} disabled={disabled} maxSelections={maxSelections} />
       <DirectionButton direction="right" values={values} onToggle={onToggle} icon={<ArrowRight className="h-4 w-4" />} disabled={disabled} maxSelections={maxSelections} />
       <span />
-      <DirectionButton direction="low" values={values} onToggle={onToggle} icon={<ArrowDown className="h-4 w-4" />} disabled={disabled} maxSelections={maxSelections} />
+      <DirectionButton direction="low" values={values} onToggle={onToggle} icon={<ArrowDown className="h-4 w-4" />} disabled={disabled} maxSelections={maxSelections} wide />
       <span />
     </div>
   );
@@ -2348,6 +3019,7 @@ function DirectionButton({
   icon,
   disabled,
   maxSelections,
+  wide,
 }: {
   direction: Direction;
   values: Direction[];
@@ -2355,6 +3027,7 @@ function DirectionButton({
   icon: ReactNode;
   disabled?: boolean;
   maxSelections: number;
+  wide?: boolean;
 }) {
   const selectedIndex = values.indexOf(direction);
   const selected = selectedIndex >= 0;
@@ -2366,7 +3039,8 @@ function DirectionButton({
       disabled={disabled}
       onClick={() => onToggle(direction)}
       className={cn(
-        "relative grid aspect-square place-items-center rounded-full border text-[9px] font-black transition disabled:cursor-not-allowed disabled:opacity-40",
+        "relative flex h-9 items-center justify-center gap-1 rounded-full border px-1 text-[9px] font-black uppercase leading-none transition disabled:cursor-not-allowed disabled:opacity-40",
+        wide && "min-w-16",
         selected
           ? "command-confirm-pulse scale-[1.08] border-amber-100 bg-amber-300 text-stone-950 shadow-[0_0_22px_rgba(251,191,36,0.65)] brightness-125"
           : "border-amber-200/20 bg-black/25 text-amber-100 hover:bg-amber-100/10",
@@ -2393,9 +3067,7 @@ function LaneRevealPanel({ reveal, now }: { reveal: LaneReveal | null; now: numb
   const resultTone =
     reveal.result === "hit"
       ? "border-red-200/55 bg-red-600/20 text-red-50 shadow-[0_0_20px_rgba(248,113,113,0.4)]"
-      : reveal.result === "evade"
-        ? "border-sky-200/55 bg-sky-500/20 text-sky-50 shadow-[0_0_20px_rgba(125,211,252,0.35)]"
-        : "border-amber-200/45 bg-amber-300/15 text-amber-50 shadow-[0_0_18px_rgba(251,191,36,0.28)]";
+      : "border-sky-200/55 bg-sky-500/20 text-sky-50 shadow-[0_0_20px_rgba(125,211,252,0.35)]";
 
   return (
     <div className="mt-1.5 grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 rounded-md border border-amber-200/15 bg-black/35 px-2 py-1.5 animate-in fade-in zoom-in-95 duration-300">
@@ -2422,7 +3094,7 @@ function RevealLaneSide({
 }) {
   return (
     <div className={cn("min-w-0", align === "right" && "text-right")}>
-      <div className="text-[8px] font-black uppercase tracking-[0.12em] text-amber-100/45">{active ? `${label} Attack` : `${label} Block`}</div>
+      <div className="text-[8px] font-black uppercase tracking-[0.12em] text-amber-100/45">{active ? `${label} Attack` : `${label} Evade`}</div>
       <div className={cn("truncate text-[10px] font-black uppercase text-amber-50", active && "text-red-100")}>
         {directions.length ? formatDirectionList(directions) : "-"}
       </div>
@@ -2481,7 +3153,7 @@ function playerLaneLog(label: string, attacker: FighterSide | null, selections: 
   }
 
   if (attacker === "ai") {
-    return `${label} block: ${directionLabel(selections.defense)}.`;
+    return `${label} evade lane: ${directionLabel(selections.defense)}.`;
   }
 
   return `${label} lanes: ${directionLabel(selections.attack)}.`;
@@ -2493,7 +3165,7 @@ function aiLaneLog(attacker: FighterSide | null, decision: AiDecision): string {
   }
 
   if (attacker === "player") {
-    return `AI block: ${directionLabel(decision.defenseDirection)}.`;
+    return `AI evade lane: ${directionLabel(decision.defenseDirection)}.`;
   }
 
   return `AI lanes: ${directionLabel(decision.attackDirection)}.`;
@@ -2531,7 +3203,7 @@ function createLaneReveal(
 
   const playerDirections = revealDirectionsForSide("player", previous, result, playerSelections);
   const aiDirections = revealDirectionsForSide("ai", previous, result, playerSelections);
-  const resultType = result.isHit ? "hit" : result.logs.some((log) => log.toLowerCase().includes("evade")) ? "evade" : "block";
+  const resultType = result.isHit ? "hit" : "miss";
 
   return {
     round: previous.round,
@@ -2610,7 +3282,7 @@ function createRoundBanner(previous: BattleState, result: ReturnType<typeof reso
   } else if (result.isHit) {
     title = "HIT!";
   } else if (result.attacker) {
-    title = "BLOCKED!";
+    title = "MISS!";
   }
 
   const detail = winner
@@ -2618,7 +3290,7 @@ function createRoundBanner(previous: BattleState, result: ReturnType<typeof reso
     : result.attacker
       ? result.isHit
         ? `${sideLabel(result.attacker)} attacks. ${defender} takes ${result.damage} HP.`
-        : `${defender} blocks the attack.`
+        : `${defender} evades. The attack misses.`
       : "The clash remains tied.";
   const delta = formatBattleDelta(previous.player, result.player, previous.ai, result.ai);
   const tone = winner === "Player" || result.attacker === "player" ? "player" : winner === "AI" || result.attacker === "ai" ? "ai" : "system";
@@ -2658,15 +3330,7 @@ function laneResultLabel(result: LaneReveal["result"]): string {
     return "HIT!";
   }
 
-  if (result === "evade") {
-    return "EVADE!";
-  }
-
-  if (result === "miss") {
-    return "MISS!";
-  }
-
-  return "BLOCK!";
+  return "MISS!";
 }
 
 function uniqueRevealDirections(directions: Direction[]): Direction[] {
@@ -2708,7 +3372,7 @@ function statusLabel(status: BattleStatus, winner: string | null): string {
   }
 
   if (status === "defend") {
-    return "Defend";
+    return "Evade";
   }
 
   if (status === "game_over") {

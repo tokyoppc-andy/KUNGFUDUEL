@@ -263,7 +263,8 @@ export function resolveRound(input: RoundInput): RoundResult {
     : { ready: false, reason: "Not requested" };
   const attackerActive = attackerActiveCheck.ready && !activeSkill[`${attacker}Triggered`];
   const defenderActive = defenderActiveCheck.ready;
-  const useTriple = tripleCheck.ready;
+  const attackerActiveAlreadyTriggered = activeSkill[`${attacker}Triggered`];
+  const useTriple = tripleCheck.ready && !attackerActiveAlreadyTriggered;
 
   if (attacker === "player") {
     activeSkill.playerReason = attackerActiveRequested ? attackerActiveCheck.reason : activeSkill.playerReason;
@@ -285,6 +286,13 @@ export function resolveRound(input: RoundInput): RoundResult {
       attacker === "player" ? input.playerSecondAttackDirection : input.aiSecondAttackDirection,
     );
     logs.push(`${sideLabel(attacker)} releases Shadow Twin Thrust.`);
+  } else if (attackerActiveAlreadyTriggered) {
+    actionKind = getHero(attackerState.heroId).activeTrigger === "charge_attack" ? "spear_charge" : "active";
+    attackDirections = getActiveAttackDirections(
+      attackerState.heroId,
+      attacker === "player" ? input.playerAttackDirection : input.aiAttackDirection,
+      attacker === "player" ? input.playerSecondAttackDirection : input.aiSecondAttackDirection,
+    );
   } else if (useTriple) {
     actionKind = "triple";
     attackDirections = uniqueMany([
@@ -304,18 +312,16 @@ export function resolveRound(input: RoundInput): RoundResult {
       ai = spendEnergy(ai, TRIPLE_STRIKE_COST);
     }
     logs.push(`${sideLabel(attacker)} spends 3 EN for Triple Strike.`);
-  } else if (attackerActive || activeSkill[`${attacker}Triggered`]) {
+  } else if (attackerActive) {
     actionKind = getHero(attackerState.heroId).activeTrigger === "charge_attack" ? "spear_charge" : "active";
-    if (!activeSkill[`${attacker}Triggered`]) {
-      if (attacker === "player") {
-        player = spendActive(player);
-        activeSkill.playerTriggered = true;
-        activeSkill.playerReason = "Triggered";
-      } else {
-        ai = spendActive(ai);
-        activeSkill.aiTriggered = true;
-        activeSkill.aiReason = "Triggered";
-      }
+    if (attacker === "player") {
+      player = spendActive(player);
+      activeSkill.playerTriggered = true;
+      activeSkill.playerReason = "Triggered";
+    } else {
+      ai = spendActive(ai);
+      activeSkill.aiTriggered = true;
+      activeSkill.aiReason = "Triggered";
     }
 
     attackDirections = getActiveAttackDirections(
@@ -362,7 +368,7 @@ export function resolveRound(input: RoundInput): RoundResult {
   }
 
   const bunnyCounter = defenderActive && defenderState.heroId === "blade_bunny";
-  const hitCount = attackDirections.filter((direction) => !defenseDirections.includes(direction)).length;
+  const hitCount = attackDirections.filter((direction) => defenseDirections.includes(direction)).length;
   let isHit = hitCount > 0;
   let damage = 0;
 

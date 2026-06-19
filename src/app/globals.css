@@ -250,103 +250,103 @@ body {
 
 @keyframes battle-idle-float {
   0%, 100% {
-    transform: translateY(0) scale(1);
+    transform: translate(-50%, -50%) translateY(0) scale(1);
   }
   50% {
-    transform: translateY(-2px) scale(1.015);
+    transform: translate(-50%, -50%) translateY(-2px) scale(1.015);
   }
 }
 
 @keyframes battle-attack-right {
   0%, 100% {
-    transform: translateX(0) scale(1);
+    transform: translate(-50%, -50%) translateX(0) scale(1);
   }
   45% {
-    transform: translateX(18px) scale(1.04);
+    transform: translate(-50%, -50%) translateX(18px) scale(1.04);
   }
 }
 
 @keyframes battle-attack-left {
   0%, 100% {
-    transform: translateX(0) scale(1);
+    transform: translate(-50%, -50%) translateX(0) scale(1);
   }
   45% {
-    transform: translateX(-18px) scale(1.04);
+    transform: translate(-50%, -50%) translateX(-18px) scale(1.04);
   }
 }
 
 @keyframes battle-hit-shake {
   0%, 100% {
-    transform: translateX(0);
+    transform: translate(-50%, -50%) translateX(0);
     filter: none;
   }
   18% {
-    transform: translateX(-5px);
+    transform: translate(-50%, -50%) translateX(-5px);
     filter: drop-shadow(0 0 14px rgba(248, 113, 113, 0.95));
   }
   36% {
-    transform: translateX(4px);
+    transform: translate(-50%, -50%) translateX(4px);
   }
   54% {
-    transform: translateX(-2px);
+    transform: translate(-50%, -50%) translateX(-2px);
   }
 }
 
 @keyframes battle-block-brace {
   0%, 100% {
-    transform: translateX(0) scale(1);
+    transform: translate(-50%, -50%) translateX(0) scale(1);
   }
   50% {
-    transform: translateX(-5px) scale(0.98);
+    transform: translate(-50%, -50%) translateX(-5px) scale(0.98);
   }
 }
 
 @keyframes battle-block-brace-left {
   0%, 100% {
-    transform: translateX(0) scale(1);
+    transform: translate(-50%, -50%) translateX(0) scale(1);
   }
   50% {
-    transform: translateX(5px) scale(0.98);
+    transform: translate(-50%, -50%) translateX(5px) scale(0.98);
   }
 }
 
 @keyframes battle-evade-right {
   0%, 100% {
-    transform: translateX(0);
+    transform: translate(-50%, -50%) translateX(0);
     opacity: 1;
   }
   45% {
-    transform: translateX(14px);
+    transform: translate(-50%, -50%) translateX(14px);
     opacity: 0.78;
   }
 }
 
 @keyframes battle-evade-left {
   0%, 100% {
-    transform: translateX(0);
+    transform: translate(-50%, -50%) translateX(0);
     opacity: 1;
   }
   45% {
-    transform: translateX(-14px);
+    transform: translate(-50%, -50%) translateX(-14px);
     opacity: 0.78;
   }
 }
 
 @keyframes battle-clash-bump {
   0%, 100% {
-    transform: translateX(0) scale(1);
+    transform: translate(-50%, -50%) translateX(0) scale(1);
   }
   45% {
-    transform: translateX(7px) scale(1.03);
+    transform: translate(-50%, -50%) translateX(7px) scale(1.03);
   }
 }
 
 @keyframes battle-clash-bump-left {
   0%, 100% {
-    transform: translateX(0) scale(1);
+    transform: translate(-50%, -50%) translateX(0) scale(1);
   }
   45% {
-    transform: translateX(-7px) scale(1.03);
+    transform: translate(-50%, -50%) translateX(-7px) scale(1.03);
   }
 }
 
@@ -371,6 +371,65 @@ body {
   }
   45% {
     box-shadow: 0 0 30px rgba(251, 191, 36, 0.88);
+  }
+}
+
+@keyframes clash-choice-ring {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(0.96);
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.22);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+    box-shadow: 0 0 24px rgba(251, 191, 36, 0.72);
+  }
+}
+
+@keyframes clash-choice-selected {
+  0%, 100% {
+    filter: brightness(1.08);
+    box-shadow: 0 0 18px rgba(251, 191, 36, 0.55);
+  }
+  50% {
+    filter: brightness(1.28);
+    box-shadow: 0 0 34px rgba(251, 191, 36, 0.9), 0 0 14px rgba(255, 255, 255, 0.45);
+  }
+}
+
+@keyframes lantern-active-glow {
+  0%, 100% {
+    filter: brightness(1);
+    box-shadow: 0 0 14px rgba(251, 191, 36, 0.36);
+  }
+  50% {
+    filter: brightness(1.22);
+    box-shadow: 0 0 28px rgba(251, 191, 36, 0.88), 0 0 12px rgba(255, 255, 255, 0.42);
+  }
+}
+
+@keyframes lane-cell-selected {
+  0%, 100% {
+    opacity: 0.86;
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 22px rgba(251, 191, 36, 0.78);
+  }
+}
+
+@keyframes battle-lane-jump {
+  0%, 100% {
+    left: var(--lane-from-x);
+    top: var(--lane-from-y);
+    transform: translate(-50%, -50%) scale(1);
+  }
+  48% {
+    left: var(--lane-to-x);
+    top: var(--lane-to-y);
+    transform: translate(-50%, -60%) scale(1.08);
   }
 }
 
@@ -459,6 +518,26 @@ body {
 
 .command-confirm-pulse {
   animation: command-confirm-pulse 0.86s ease-in-out infinite;
+}
+
+.clash-choice-ring {
+  animation: clash-choice-ring 0.82s ease-in-out infinite;
+}
+
+.clash-choice-selected {
+  animation: clash-choice-selected 0.86s ease-in-out infinite;
+}
+
+.lantern-active-glow {
+  animation: lantern-active-glow 0.95s ease-in-out infinite;
+}
+
+.lane-cell-selected {
+  animation: lane-cell-selected 1s ease-in-out infinite;
+}
+
+.battle-lane-jump {
+  animation: battle-lane-jump 0.95s ease-in-out infinite;
 }
 
 .skill-ready-pulse {
